@@ -10,8 +10,12 @@ web GUI:
   the most recent committed compaction with the nodes it replaced.
 
 Both cards observe committed Session events through the plugin's own Session
-projection. The plugin never writes to the Session log, never calls a model,
-and never changes the agent loop or the compaction policy.
+projection. The plugin never writes to the Session log and never changes the
+agent loop or the compaction policy. It calls a model in exactly one place: the
+snapshot card's digest, which describes the runtime-context record on screen for
+a reader who should not have to parse DSH's own state prose. That call is
+deployment-configured and off without a configured route — see
+[Reading the snapshot card](#reading-the-snapshot-card).
 
 **Harness version.** Built and exercised against **DeepSeek Harness
 `0.1.5-rc.2`** (`dsh` Host + Web), and declared to require
@@ -45,8 +49,12 @@ expand/collapse control is the host Sidebar's. The tab type registers once:
   projection carries none, so the card states what it knows — how many calls a
   turn made — instead of inventing a figure.
 - **Context snapshot** (`context-snapshot-bar-snapshot`) — the latest committed
-  runtime-context record, with each contribution's own text, its standing, and a
-  copy action.
+  runtime-context record, drawn as two separate answers to "what is in this
+  snapshot". The **content digest** (a model-written description of what the
+  record holds, in the language the card is speaking) sits above, in its own
+  accented block; the **raw record** (DSH's own state text, verbatim, under its
+  producer's names) sits below a divider, with its standing and a copy action.
+  The digest never replaces the raw text: it is an aid for reading it.
 
 One **composer entry** reproduces the prototype's snapshot row — glyph, title,
 summary, standing, chevron — and opens the column on the runtime-snapshot tab.
@@ -127,6 +135,36 @@ every retained message it says how many were left out. The latest committed
 compaction appears with the summary text and the nodes it replaced, also with
 its own omitted count.
 
+### Reading the snapshot card
+
+The digest is one auxiliary model call per distinct snapshot record and
+language, cached in the Host process, so reopening the card costs nothing and
+two Sessions that recorded the same text share one answer. It is asked for only
+while the runtime-snapshot tab is on screen.
+
+Configure the route on the plugin's row; there is no default, because the model
+is a deployment choice:
+
+```yaml
+# <profile>/cordis.patch.yml, or the bundle layer's config
+- id: context-snapshot-bar
+  config:
+    snapshotSummaryProvider: deepseek-official
+    snapshotSummaryModel: deepseek-flash
+    snapshotSummaryMaxTokens: 400
+    snapshotSummaryTimeoutMs: 30000
+```
+
+Without a route, or with `snapshotSummaryEnabled: false`, the card states why the
+digest is missing and still shows the raw record. A failed or slow call is
+reported once in the Host log and leaves the raw record on screen.
+
+The digest is written from the same section text the card displays, which DSH
+already sends to the model on every request, so it discloses nothing the model
+did not have. Its own call carries no `purpose`, because the harness's
+`GenerateOptions.purpose` accepts only `compaction` and `session-title`; the
+provider therefore attributes it like an ordinary request.
+
 ### Known limitations and deferred work
 
 - **Cold fold cost grows super-linearly.** The fold keeps the whole surface in
@@ -142,6 +180,8 @@ its own omitted count.
   long enough to need it exists.
 
 
+- The digest describes the section text the card holds, which the display bound
+  may have truncated; it is never given the untruncated record.
 - The inspector covers message nodes and both halves of a tool invocation.
   Selecting a call shows the arguments it was given; selecting its result shows
   the committed excerpt, or the waiting state while none has committed.

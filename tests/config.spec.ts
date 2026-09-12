@@ -15,6 +15,11 @@ const DEFAULTS = {
   comparisonNodeLimit: 120,
   snapshotPreviewChars: 2000,
   snapshotSectionLimit: 32,
+  snapshotSummaryEnabled: true,
+  snapshotSummaryProvider: '',
+  snapshotSummaryModel: '',
+  snapshotSummaryMaxTokens: 400,
+  snapshotSummaryTimeoutMs: 30000,
 }
 
 /** Inclusive range each field accepts. */
@@ -25,6 +30,8 @@ const RANGES = {
   comparisonNodeLimit: [20, 500],
   snapshotPreviewChars: [200, 8000],
   snapshotSectionLimit: [1, 128],
+  snapshotSummaryMaxTokens: [64, 4000],
+  snapshotSummaryTimeoutMs: [1000, 120000],
 } as const
 
 describe('resolveConfig', () => {
@@ -65,16 +72,31 @@ describe('resolveConfig', () => {
 })
 
 describe('configFingerprint', () => {
-  it('changes whenever any bound changes', () => {
+  it('changes whenever a fold bound changes', () => {
     const base = resolveConfig({})
+    const bounds = ['visibleNodeLimit', 'excerptChars', 'toolArgsChars', 'comparisonNodeLimit', 'snapshotPreviewChars', 'snapshotSectionLimit'] as const
     const fingerprints = new Set<string>()
-    for (const field of Object.keys(DEFAULTS) as (keyof typeof DEFAULTS)[]) {
+    for (const field of bounds) {
       const [min, max] = RANGES[field]
       fingerprints.add(configFingerprint({ ...base, [field]: min }))
       fingerprints.add(configFingerprint({ ...base, [field]: max }))
     }
     fingerprints.add(configFingerprint(base))
-    expect(fingerprints.size).toBe(Object.keys(DEFAULTS).length * 2 + 1)
+    expect(fingerprints.size).toBe(bounds.length * 2 + 1)
+  })
+
+  it('ignores the digest settings, which annotate rather than fold', () => {
+    // The digest chooses how the card is described, not how the log is read, so
+    // reconfiguring it must not throw away a reusable projection cache row.
+    const base = resolveConfig({})
+    expect(configFingerprint({
+      ...base,
+      snapshotSummaryEnabled: false,
+      snapshotSummaryProvider: 'deepseek-official',
+      snapshotSummaryModel: 'deepseek-chat',
+      snapshotSummaryMaxTokens: 900,
+      snapshotSummaryTimeoutMs: 5000,
+    })).toBe(configFingerprint(base))
   })
 
   it('is stable for equal configurations', () => {

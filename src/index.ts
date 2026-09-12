@@ -9,6 +9,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { resolveConfig } from './shared/config.js'
 import { createProjection, PROJECTION_KEY } from './projection/index.js'
+import { registerSnapshotSummary } from './summary/index.js'
 
 export { PROJECTION_KEY } from './projection/index.js'
 export { resolveConfig, type Config } from './shared/config.js'
@@ -69,7 +70,9 @@ function reportInactive(ctx: Context, error: unknown): void {
  * unusable configuration, or a changed projection API leaves this plugin
  * inactive with one diagnostic instead of a dead `dsh`. The registered fold and
  * view are total for the same reason: the registry drives them without a guard
- * of its own, inside the Session append that committed the event.
+ * of its own, inside the Session append that committed the event. The snapshot
+ * digest binds on its own soft path, so its own dependencies cannot disable the
+ * cards.
  *
  * @param ctx - the plugin's Cordis context.
  * @param config - untrusted configuration from the composition; validated here at load.
@@ -91,6 +94,9 @@ export function apply(ctx: Context, config: unknown): void {
         reportInactive(projections, error)
       }
     })
+    // The digest needs services the projection does not, so it binds on its own
+    // soft path: without `connection` or `llm` the cards render without it.
+    registerSnapshotSummary(ctx, resolved)
   } catch (error) {
     reportInactive(ctx, error)
   }

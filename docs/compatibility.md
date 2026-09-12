@@ -60,6 +60,19 @@ plugin must depend on it explicitly to type-check. This plugin declares it in
 `devDependencies`; nothing is imported from it at runtime, because every use is
 `import type` and is erased before bundling.
 
+## Services and the auxiliary model call
+
+| Service | Bound | What the plugin does with it |
+|---|---|---|
+| `sessionProjections` | soft (`ctx.inject`) | registers the projection whose view both cards read |
+| `connection` | soft (`ctx.inject`) | serves the snapshot digest on its own authenticated channel, `/context-snapshot-bar` |
+| `llm` | soft (`ctx.inject`) | writes the snapshot digest, on the route configured for the row |
+
+Every binding is soft on purpose: a missing service leaves the plugin inert
+rather than leaving a Loader entry pending, which would abort `dsh` startup. The
+digest is the plugin's only model call; it sends the section text the card shows,
+which DSH already includes in every request.
+
 ## Runtime dependency policy
 
 | Package | Section | Range | Used for |

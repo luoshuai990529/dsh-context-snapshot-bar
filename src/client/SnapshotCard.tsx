@@ -8,6 +8,7 @@
 
 import { useEffect, useState } from 'react'
 import type { BarView, SectionView, SnapshotStatus, SnapshotView } from '../shared/types.ts'
+import type { SummaryState, SummaryUnavailableReason } from './summary.ts'
 import type { ContextSnapshotBarKey, TranslateBar } from './locales.ts'
 import { SCOPE, cls, hasSectionLabel, sectionLabel } from './display.ts'
 import { commitIdentity } from './motion.ts'
@@ -18,7 +19,19 @@ export interface SnapshotCardProps {
   view: BarView | undefined
   /** Translate a key in this plugin's namespace. */
   t: TranslateBar
+  /**
+   * The model-written digest of the record on screen. Absent when the Client has
+   * no digest channel, which leaves the card showing the raw record alone.
+   */
+  summary?: SummaryState
 }
+
+/** Copy key naming why a digest is unavailable. */
+const DIGEST_REASON_KEYS = {
+  disabled: 'snapshot.digest.disabled',
+  unconfigured: 'snapshot.digest.unconfigured',
+  failed: 'snapshot.digest.failed',
+} as const satisfies Record<SummaryUnavailableReason, ContextSnapshotBarKey>
 
 /** Copy key naming each standing. */
 const STATUS_KEYS = {
@@ -67,7 +80,7 @@ export function formatTime(time: number): string {
  * @param props - the projection value and the card's copy.
  * @returns the card element.
  */
-export function SnapshotCard({ view, t }: SnapshotCardProps) {
+export function SnapshotCard({ view, t, summary = { status: 'idle' } }: SnapshotCardProps) {
   const [copy, setCopy] = useState<CopyState>('idle')
   const snapshot = view?.snapshot
   const standing: SnapshotStatus = snapshot?.status ?? 'none'
@@ -89,6 +102,21 @@ export function SnapshotCard({ view, t }: SnapshotCardProps) {
         <p className={cls('pane-caption')}>{t('snapshot.paneCaption')}</p>
         <div className={cls('snapshot-detail', 'open', flash.count > 0 && 'state-change')} key={flash.count}>
           <p className={cls('snapshot-note')}>{t(NOTE_KEYS[standing])}</p>
+          {summary.status === 'idle' ? null : (
+            <section className={cls('snapshot-digest')} aria-label={t('snapshot.digestCaption')}>
+              <p className={cls('digest-caption')}>{t('snapshot.digestCaption')}</p>
+              {summary.status === 'loading' ? <p className={cls('digest-note')}>{t('snapshot.digest.loading')}</p> : null}
+              {summary.status === 'ready' ? <p className={cls('digest-text')}>{summary.text}</p> : null}
+              {summary.status === 'unavailable'
+                ? <p className={cls('digest-note')}>{t(DIGEST_REASON_KEYS[summary.reason])}</p>
+                : null}
+              {summary.status === 'ready'
+                ? <p className={cls('digest-note')}>{t('snapshot.digest.model', { model: summary.model })}</p>
+                : null}
+            </section>
+          )}
+          <section className={cls('snapshot-raw')} aria-label={t('snapshot.rawCaption')}>
+            <p className={cls('digest-caption')}>{t('snapshot.rawCaption')}</p>
           {recorded && snapshot !== undefined ? (
             <>
               <div className={cls('meta-row')}>
@@ -138,6 +166,7 @@ export function SnapshotCard({ view, t }: SnapshotCardProps) {
           {snapshot === undefined || snapshot.omittedSections === 0
             ? null
             : <p className={cls('snapshot-note')}>{t('snapshot.omittedSections', { count: snapshot.omittedSections })}</p>}
+          </section>
           {standing === 'none' ? null : (
             <p className={cls('snapshot-standing')}>
               <span className={cls('state', STATUS_MODIFIERS[standing])}>{t(STATUS_KEYS[standing])}</span>

@@ -84,6 +84,47 @@ const CALL = {
   truncated: false,
 }
 
+describe('SnapshotCard digest', () => {
+  const SECTIONS = [
+    { name: 'sandbox:policy', text: 'DSH file policy: workspace-write', truncated: false },
+    { name: 'approval:policy', text: 'approval prompts are asked', truncated: false },
+  ]
+  const recorded = view({ snapshot: { ...snapshot('present', 2), sections: SECTIONS } })
+
+  it('separates the model digest from the raw record it describes', () => {
+    render(<SnapshotCard
+      view={recorded}
+      t={t}
+      summary={{ status: 'ready', text: '沙箱允许写入工作区，审批会询问。', model: 'deepseek-official/deepseek-chat' }}
+    />)
+    const blocks = [...document.querySelectorAll('.snapshot-digest, .snapshot-raw')]
+    expect(blocks.map(element => element.className)).toEqual(['snapshot-digest', 'snapshot-raw'])
+    expect(document.querySelector('.snapshot-digest')?.textContent).toContain('内容摘要 · 由模型生成')
+    expect(document.querySelector('.snapshot-digest')?.textContent).toContain('沙箱允许写入工作区')
+    expect(document.querySelector('.snapshot-digest')?.textContent).toContain('deepseek-official/deepseek-chat')
+    // The raw record keeps its own caption and the section text unchanged.
+    expect(document.querySelector('.snapshot-raw')?.textContent).toContain('原始记录 · DSH 内部状态原文')
+    expect(document.querySelector('.snapshot-raw')?.textContent).toContain('DSH file policy: workspace-write')
+  })
+
+  it('draws the digest states without disturbing the raw record', () => {
+    const { unmount } = render(<SnapshotCard view={recorded} t={t} summary={{ status: 'loading' }} />)
+    expect(document.querySelector('.snapshot-digest')?.textContent).toContain('正在生成摘要')
+    expect(document.querySelector('.snapshot-raw')?.textContent).toContain('approval prompts are asked')
+    unmount()
+
+    render(<SnapshotCard view={recorded} t={t} summary={{ status: 'unavailable', reason: 'unconfigured' }} />)
+    expect(document.querySelector('.snapshot-digest')?.textContent).toContain('未配置摘要模型')
+    expect(document.querySelector('.snapshot-raw')?.textContent).toContain('DSH file policy: workspace-write')
+  })
+
+  it('omits the digest when no channel answered', () => {
+    render(<SnapshotCard view={recorded} t={t} summary={{ status: 'idle' }} />)
+    expect(document.querySelector('.snapshot-digest')).toBeNull()
+    expect(document.querySelector('.snapshot-raw')).not.toBeNull()
+  })
+})
+
 describe('TrajectoryCard', () => {
   /** Two turns plus the standing anchors the projection keeps outside a turn. */
   const NODES = [

@@ -28,6 +28,7 @@ import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots
 import type { ContextSnapshotBarKey } from './locales.ts'
 import { ComposerEntry, type ComposerEntryInjected } from './ComposerEntry.tsx'
 import { ContextPanel, type ContextPane } from './ContextPanel.tsx'
+import type { SummaryCaller } from './summary.ts'
 import { en, zh } from './locales.ts'
 import { cardCss } from './styles.ts'
 import { hostCss } from './host.css.ts'
@@ -77,8 +78,13 @@ function requestedPane(params: unknown): ContextPane | undefined {
   return pane === 'trajectory' || pane === 'snapshot' ? pane : undefined
 }
 
-/** The context column's body: the two fixed tabs over the selected card. */
-function ContextBody({ useProjection, useTabInfo, t }: ContextBodyProps) {
+/**
+ * The context column's body: the two fixed tabs over the selected card.
+ *
+ * The digest caller and the translator both arrive per render, so the body takes
+ * the caller getter as a prop rather than reading a service itself.
+ */
+function ContextBody({ useProjection, useTabInfo, t, summaryCaller }: ContextBodyProps & { summaryCaller: () => SummaryCaller | undefined }) {
   const { tab } = useTabInfo()
   return (
     <ContextPanel
@@ -86,6 +92,7 @@ function ContextBody({ useProjection, useTabInfo, t }: ContextBodyProps) {
       requested={requestedPane(tab.navigation.params)}
       navigationRevision={tab.navigation.revision}
       t={t}
+      summaryCaller={summaryCaller}
     />
   )
 }
@@ -128,7 +135,31 @@ function reportInactive(ctx: ClientContext, error: unknown): void {
  *
  * @param ctx - a context whose slot, locale, and sidebar services are bound.
  */
+/**
+ * The digest caller holder.
+ *
+ * The kernel's connection service activates asynchronously, so the seat is
+ * registered before the caller exists; the card re-checks through this getter
+ * until it is there. Without a connection service the holder stays empty and the
+ * cards render without the digest section.
+ */
+const caller: { current: SummaryCaller | undefined } = { current: undefined }
+
+/** Read the digest caller, if the connection service has activated. */
+function readSummaryCaller(): SummaryCaller | undefined {
+  return caller.current
+}
+
 function register(ctx: ClientContext): void {
+  // The digest is optional for the cards, so it binds on its own soft path:
+  // a kernel without Connection still gets both cards, just without a digest.
+  ctx.inject(['connection'], (scoped) => {
+    const connection = scoped.get('connection') as { rpc?: { call?: SummaryCaller } } | undefined
+    const call = connection?.rpc?.call
+    if (typeof call === 'function' && connection?.rpc !== undefined) {
+      caller.current = call.bind(connection.rpc)
+    }
+  })
   const t = ctx.locale.bind(NS)
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'context-snapshot-bar: dictionaries')
   ctx.effect(() => {
@@ -162,7 +193,10 @@ function register(ctx: ClientContext): void {
   // removes it with the fiber.
   ctx.effect(function* () {
     yield ctx.slots.inject('sidebar.right.pane.tab', function* () {
-      yield ctx.slots.register({ name: 'sidebar.right.pane.tab', key: CONTEXT_ID, locale: NS }, ContextBody)
+      yield ctx.slots.register(
+        { name: 'sidebar.right.pane.tab', key: CONTEXT_ID, locale: NS },
+        (props: ContextBodyProps) => <ContextBody {...props} summaryCaller={readSummaryCaller} />,
+      )
     })
     yield ctx.slots.inject('sidebar.right.pane.tab.title', function* () {
       yield ctx.slots.register({ name: 'sidebar.right.pane.tab.title', key: CONTEXT_ID }, ContextTitle)

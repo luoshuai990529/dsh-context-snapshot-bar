@@ -23,6 +23,16 @@ export interface Config {
   snapshotPreviewChars: number
   /** Maximum number of snapshot contributions the Client receives. */
   snapshotSectionLimit: number
+  /** Whether the snapshot card may ask the Host for a model-written digest. */
+  snapshotSummaryEnabled: boolean
+  /** Provider route the digest call uses; empty leaves the digest unavailable. */
+  snapshotSummaryProvider: string
+  /** Model id the digest call uses; empty leaves the digest unavailable. */
+  snapshotSummaryModel: string
+  /** Output-token cap for one digest call. */
+  snapshotSummaryMaxTokens: number
+  /** End-to-end deadline for one digest call, in milliseconds. */
+  snapshotSummaryTimeoutMs: number
 }
 
 /** The JSON-compatible form callers supply; every field is optional and defaulted. */
@@ -33,6 +43,14 @@ const configInputSchema = z.object({
   comparisonNodeLimit: z.number().int().min(20).max(500).default(120),
   snapshotPreviewChars: z.number().int().min(200).max(8000).default(2000),
   snapshotSectionLimit: z.number().int().min(1).max(128).default(32),
+  snapshotSummaryEnabled: z.boolean().default(true),
+  // The route is deployment-varying, so it has no default: an empty provider or
+  // model leaves the digest section reporting that no model is configured
+  // instead of guessing one.
+  snapshotSummaryProvider: z.string().default(''),
+  snapshotSummaryModel: z.string().default(''),
+  snapshotSummaryMaxTokens: z.number().int().min(64).max(4000).default(400),
+  snapshotSummaryTimeoutMs: z.number().int().min(1000).max(120000).default(30000),
 })
 
 /**
@@ -74,6 +92,9 @@ export function configFingerprint(config: Config): string {
     config.comparisonNodeLimit,
     config.snapshotPreviewChars,
     config.snapshotSectionLimit,
+    // The digest settings are deliberately absent: they choose how the card is
+    // annotated, not how the fold reads the log, so changing them must not
+    // invalidate a projection cache row.
   ].join(':')
 }
 

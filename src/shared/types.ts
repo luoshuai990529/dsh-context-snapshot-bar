@@ -152,6 +152,47 @@ export interface BarView {
   latestChange: ChangeView | null
 }
 
+/** One snapshot contribution as the digest request carries it. */
+export interface SnapshotSummarySection {
+  /** The producer's section name, verbatim. */
+  readonly name: string
+  /** The section text the card shows. */
+  readonly text: string
+}
+
+/**
+ * One digest request from the snapshot card.
+ *
+ * The card sends the contributions it already displays rather than a session
+ * identity, so the digest needs no session lookup and one identical record
+ * reuses the same answer everywhere it appears.
+ */
+export interface SnapshotSummaryRequest {
+  /** Seq of the snapshot record the digest describes. */
+  readonly snapshotSeq: number
+  /** Language the digest is written in, matching the card's copy. */
+  readonly locale: 'zh' | 'en'
+  /** The contributions to describe, in surface order. */
+  readonly sections: readonly SnapshotSummarySection[]
+}
+
+/** What the Host answers for one digest request. */
+export type SnapshotSummaryResponse =
+  | {
+    /** The digest is available. */
+    readonly status: 'ready'
+    /** The model-written digest. */
+    readonly text: string
+    /** The route that wrote it, for the card's provenance line. */
+    readonly model: string
+  }
+  | {
+    /** The digest is not available. */
+    readonly status: 'unavailable'
+    /** Why, as a short machine-readable reason the card localizes. */
+    readonly reason: 'disabled' | 'unconfigured' | 'failed'
+  }
+
 /** One indexed surface position: a derived node view, or a position a later replacement may fill. */
 export interface SurfaceEntry {
   /** The committed event seq at this surface position. */
