@@ -246,6 +246,11 @@ those paths is closed here:
   unusable configuration or a changed projection API costs one log line instead
   of the harness. `tests/load-safety.spec.ts` drives all of that against the real
   Cordis lifecycle.
+- **The same containment in the browser.** The Web Client kernel rejects its
+  whole boot on a Loader entry that fails or stays pending
+  (`assertEntriesActive`), so the Client half binds its slot, locale, and sidebar
+  services through `ctx.inject` as well: a renamed service costs the cards, not
+  the GUI.
 
 What remains is the Session package itself: a harness version that moves
 `@deepseek-ai/dsh-session/surface` or `./types` would leave this row

@@ -42,8 +42,8 @@ const CONTEXT_KIND = 'context-snapshot-bar-context'
 /** Position of the composer entry among the input dock's rows: last, directly above the input. */
 const ENTRY_ORDER = 30
 
-/** Required services: the slot registry, copy, and the right column's faces. */
-export const inject = ['slots', 'locale', 'sidebarRight', 'sidebarRightTabs']
+/** Plugin identity used in the browser kernel's diagnostics. */
+const PLUGIN_ID = 'context-snapshot-bar'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -102,12 +102,33 @@ function ContextTitle({ useTabInfo }: PropsRuntime<'sidebar.right.pane.tab.title
 }
 
 /**
+ * Report why this plugin stayed inactive, preferring the kernel logger.
+ *
+ * A diagnostic must not become the failure it reports, so the browser console
+ * carries it when no logger service is reachable.
+ *
+ * @param ctx - a context whose `logger` service may or may not be available.
+ * @param error - the failure this plugin swallowed.
+ */
+function reportInactive(ctx: ClientContext, error: unknown): void {
+  const detail = error instanceof Error ? error.message : String(error)
+  const message = `${PLUGIN_ID}: inactive (${detail})`
+  try {
+    ctx.logger.warn(message)
+  } catch {
+    // Accessing an unavailable service throws; the browser console is the only
+    // channel left, and it cannot throw.
+    console.warn(`dsh: ${message}`)
+  }
+}
+
+/**
  * Register the context column, its body and chip title, its dictionaries, its
  * two stylesheets, and the composer entry.
  *
- * @param ctx - the browser plugin's Cordis context.
+ * @param ctx - a context whose slot, locale, and sidebar services are bound.
  */
-export function apply(ctx: ClientContext): void {
+function register(ctx: ClientContext): void {
   const t = ctx.locale.bind(NS)
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'context-snapshot-bar: dictionaries')
   ctx.effect(() => {
@@ -157,4 +178,29 @@ export function apply(ctx: ClientContext): void {
       open: () => { ctx.sidebarRight.openTab(CONTEXT_KIND, { params: { pane: 'snapshot' } }) },
     }),
   }, EntryBody)), 'context-snapshot-bar: composer entry')
+}
+
+/**
+ * Register everything this plugin contributes to the Web Client.
+ *
+ * The services are bound softly and the registrations swallow their own
+ * failures. The browser kernel rejects the whole boot on a Loader entry that
+ * stays pending on a missing service or that fails while activating, so a card
+ * must never be able to keep the GUI from mounting: a renamed service or a
+ * changed slot API costs one console line and no cards instead.
+ *
+ * @param ctx - the browser plugin's Cordis context.
+ */
+export function apply(ctx: ClientContext): void {
+  try {
+    ctx.inject(['slots', 'locale', 'sidebarRight', 'sidebarRightTabs'], (scoped) => {
+      try {
+        register(scoped)
+      } catch (error) {
+        reportInactive(scoped, error)
+      }
+    })
+  } catch (error) {
+    reportInactive(ctx, error)
+  }
 }

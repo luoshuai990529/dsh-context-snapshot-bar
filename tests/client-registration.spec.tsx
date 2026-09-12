@@ -8,7 +8,7 @@
 
 import { existsSync, readFileSync } from 'node:fs'
 import { createContext, runInContext } from 'node:vm'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 const ROOT = `${process.cwd()}/`
 
@@ -150,6 +150,15 @@ function fakeClientContext(): FakeClientContext & { ctx: unknown } {
     if (typeof produced === 'function') disposers.push(produced as () => void)
   }
   const ctx = {
+    // The kernel's own soft service binding: the callback runs with the
+    // requested services available, and an entry that would otherwise stay
+    // pending never becomes one.
+    inject: (services: string[], callback: (ctx: unknown) => void) => {
+      for (const service of services) {
+        if ((ctx as Record<string, unknown>)[service] === undefined) return
+      }
+      callback(ctx)
+    },
     effect: (callback: () => unknown) => {
       materializeEffect(callback)
       return () => undefined
@@ -230,7 +239,9 @@ describe('Client half', () => {
   it('registers one context column with its body and chip title', () => {
     const [registration] = loadBundle(read('lib/client.js'))
     const plugin = materialize(registration as Registration, moduleTable).exports as ClientPlugin
-    expect(plugin.inject).toEqual(['slots', 'locale', 'sidebarRight', 'sidebarRightTabs'])
+    // A declared `inject` would hold this entry pending, and the browser kernel
+    // rejects the whole boot on a pending entry, so the plugin binds softly.
+    expect(plugin.inject).toBeUndefined()
     const fake = fakeClientContext()
     plugin.apply(fake.ctx)
     // One column, whose own two tabs carry both cards.
@@ -267,5 +278,26 @@ describe('Client half', () => {
     expect(fake.opened).toEqual([
       { kind: 'context-snapshot-bar-context', params: { pane: 'snapshot' } },
     ])
+  })
+
+  it('contributes nothing and does not throw when a service is missing', () => {
+    // The browser kernel rejects the whole boot on an entry that stays pending,
+    // so a renamed client service must cost the cards and nothing else.
+    const [registration] = loadBundle(read('lib/client.js'))
+    const plugin = materialize(registration as Registration, moduleTable).exports as ClientPlugin
+    const fake = fakeClientContext()
+    delete (fake.ctx as Record<string, unknown>)['sidebarRightTabs']
+    // Earlier tests in this file share one jsdom document, so the sheet count is
+    // compared with itself rather than with zero.
+    const sheets = fake.styleTags()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    try {
+      expect(() => { plugin.apply(fake.ctx) }).not.toThrow()
+    } finally {
+      warn.mockRestore()
+    }
+    expect(fake.tabTypes).toEqual([])
+    expect(fake.slotRegistrations).toEqual([])
+    expect(fake.styleTags()).toBe(sheets)
   })
 })
