@@ -6,15 +6,25 @@
  * main-column panels with the matching sidebar rows.
  */
 
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { createContext, runInContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
 
 const ROOT = `${process.cwd()}/`
 
-/** Read one project file relative to the plugin root. */
+/**
+ * Read one project file relative to the plugin root.
+ *
+ * @param relative - project-relative path.
+ * @returns the file's text.
+ * @throws when a `lib/` artifact is absent, naming the build step that emits it.
+ */
 function read(relative: string): string {
-  return readFileSync(`${ROOT}${relative}`, 'utf8')
+  const path = `${ROOT}${relative}`
+  if (!existsSync(path)) {
+    throw new Error(`${relative} is missing; \`npm test\` builds it, and \`npx vitest run\` does not`)
+  }
+  return readFileSync(path, 'utf8')
 }
 
 /** One registered loader factory. */

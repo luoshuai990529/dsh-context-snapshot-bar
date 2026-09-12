@@ -44,7 +44,7 @@
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.host.json && tsc -p tsconfig.client.json",
-    "test": "vitest run",
+    "test": "npm run build && vitest run",
     "build": "node scripts/build.mjs && tsc -p tsconfig.build.json",
     "check:pack": "node scripts/check-pack.mjs",
     "pack": "npm run build && pnpm pack --pack-destination ./artifacts",

@@ -286,11 +286,17 @@ profile that Open Design installs with the user's own `dsh`.
 ```sh
 pnpm install
 pnpm run typecheck   # both compile faces, strict
-pnpm test            # unit, artifact, and loader-protocol tests
 pnpm run build       # declarations + Host ESM bundle + Client loader factory
+pnpm test            # unit, artifact, and loader-protocol tests
 pnpm run check:pack  # published file list and artifact contract
 pnpm run pack        # artifacts/dsh-context-snapshot-bar-0.1.0.tgz
 ```
+
+`pnpm test` builds first, because `tests/client-registration.spec.tsx` and
+`pnpm run check:pack` load the emitted `lib/client.js` and `lib/index.js`: the
+suite checks the artifact the loader resolves, not only the sources. Running a
+single spec through `npx vitest run tests/cards.spec.tsx` skips that build, so
+build once before the first such run.
 
 The build is self-contained: `scripts/build.mjs` drives `tsc` for declarations
 and `esbuild` for both runtime artifacts, and consumes no harness monorepo build
