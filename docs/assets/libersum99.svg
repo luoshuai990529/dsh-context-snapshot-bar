@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="144" height="24" viewBox="0 0 144 24" role="img" aria-label="LiberSum99">
+  <rect x=".5" y=".5" width="143" height="23" rx="6" fill="#FEFCF6" stroke="#EAE6DC"/>
+  <rect x="1" y="5" width="3" height="14" rx="1.5" fill="#E84A5F"/>
+  <circle cx="14" cy="12" r="3" fill="#2B7FD8"/>
+  <text x="24" y="16" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="600" fill="#1A1A2E">LiberSum99</text>
+  <circle cx="133" cy="12" r="2.5" fill="#F4D758"/>
+</svg>

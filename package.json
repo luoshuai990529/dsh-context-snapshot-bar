@@ -26,7 +26,15 @@
     "lib/types/**/*.d.ts",
     "cordis.patch.yml",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "README.en.md",
+    "README.ja.md",
+    "docs/guide.md",
+    "docs/assets/libersum99.svg",
+    "docs/compatibility.md",
+    "docs/acceptance.md",
+    "CHANGELOG.md",
+    "docs/assets/dsh-plugin.svg"
   ],
   "dsh": {
     "bundle": {
