@@ -26,7 +26,7 @@ the version string.
 | Artifact | Version | Source | How it was obtained |
 |---|---|---|---|
 | `@deepseek-ai/dsh` (Host + Web) | `0.1.5-rc.2` | npm registry | `npm install @deepseek-ai/dsh@0.1.5-rc.2` into `/tmp/dsh-probe-install`; `dist.shasum 2c78db39568d910868f1e4f34062a4f346d4815d`, `dist.integrity sha512-8Xc8hCQHcIWRmTCVU/xZdp6/qMsWMeAd2ObChKDEsfhUPJFXx6H0lgeb1DxUMD86HZrrVN+1bCvn1ppjZ/fOxw==` |
-| `dsh-context-snapshot-bar` | `0.1.1` | local build + `pnpm pack` | `artifacts/dsh-context-snapshot-bar-0.1.0.tgz`, sha256 `b183d83bb93373cb392c5281d03726f1c9dbfa9f0e282d63c37ebd0d2e7b0af5` |
+| `dsh-context-snapshot-bar` | `0.2.0` | local build + `pnpm pack` | `artifacts/dsh-context-snapshot-bar-0.2.0.tgz`, sha256 `aa7c08fe7d661d2e0c44826fff93523612cb56a7af06df436d4eb7cecdce8e0a` |
 
 Not tested, and therefore not claimed compatible: the monorepo's own source
 build of `c291e7961a`, every published DSH version other than `0.1.5-rc.2`, and

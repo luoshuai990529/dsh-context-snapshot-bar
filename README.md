@@ -242,7 +242,7 @@ presentation; it needs Chrome and never runs in CI.
 ## Install
 
 ```sh
-dsh plugin --profile <profile> add ./dsh-context-snapshot-bar-0.1.1.tgz
+dsh plugin --profile <profile> add ./dsh-context-snapshot-bar-0.2.0.tgz
 dsh --profile <profile> --dump-config   # the "# == dsh-context-snapshot-bar" layer
 dsh --profile <profile>
 ```
@@ -399,13 +399,21 @@ the load instead of being clamped. Set them in the profile's
 | `comparisonNodeLimit` | 120 | 20–500 | Replaced nodes kept in the compaction comparison |
 | `snapshotPreviewChars` | 2000 | 200–8000 | Characters kept per snapshot section |
 | `snapshotSectionLimit` | 32 | 1–128 | Snapshot sections sent to the Client |
+| `snapshotSummaryEnabled` | `true` | boolean | Whether the card may ask for a model-written digest |
+| `snapshotSummaryProvider` | none | provider route | Route the digest call uses; empty leaves it unavailable |
+| `snapshotSummaryModel` | none | model id | Model the digest call uses; empty leaves it unavailable |
+| `snapshotSummaryMaxTokens` | 400 | 64–4000 | Output-token cap for one digest call |
+| `snapshotSummaryTimeoutMs` | 30000 | 1000–120000 | End-to-end deadline for one digest call |
 
-A configuration change applies at the next Host start; the projection cache is
-keyed by the configuration fingerprint, so a changed bound replays the Session
-log instead of resuming text the previous bound truncated.
+A bound change applies at the next Host start; the projection cache is keyed by
+the configuration fingerprint, so a changed bound replays the Session log instead
+of resuming text the previous bound truncated. The `snapshotSummary*` fields are
+deliberately outside that fingerprint: they choose how the snapshot is described,
+not how the log is read, so changing the digest model keeps every cached row.
 
 ## Related
 
+[CHANGELOG.md](CHANGELOG.md) lists what each published version changed.
 [OpenDesign integration](docs/opendesign-integration.md) records how this
 machine's Open Design app drives DeepSeek Harness through the `open-design`
 profile that Open Design installs with the user's own `dsh`.
@@ -418,7 +426,7 @@ pnpm run typecheck   # both compile faces, strict
 pnpm run build       # declarations + Host ESM bundle + Client loader factory
 pnpm test            # unit, artifact, and loader-protocol tests
 pnpm run check:pack  # published file list and artifact contract
-pnpm run pack        # artifacts/dsh-context-snapshot-bar-0.1.1.tgz
+pnpm run pack        # artifacts/dsh-context-snapshot-bar-0.2.0.tgz
 ```
 
 `pnpm test` builds first, because `tests/client-registration.spec.tsx` and

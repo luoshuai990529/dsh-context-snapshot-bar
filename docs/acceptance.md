@@ -1,5 +1,12 @@
 # Acceptance record
 
+> **Scope.** This is a dated record of one acceptance run against
+> `0.1.0`, kept as it was written. The changes made since — the model-written
+> snapshot digest, harness-upgrade containment, the compaction and digest-route
+> fixes — are listed in [CHANGELOG.md](../CHANGELOG.md), and every one of them
+> ships with the tests that hold it; re-run the commands below for a fresh
+> record rather than reading this one as current acceptance.
+
 What was actually executed, on which artifact, and what it proved. Every row
 below was run in this session; anything not run is listed as not executed rather
 than assumed. Unless a row says otherwise, the artifact under test is
