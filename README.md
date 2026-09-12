@@ -221,6 +221,50 @@ artifact, but that checkout was never installed and driven. See
 [docs/compatibility.md](docs/compatibility.md) for the comparison and for the
 list of things that were **not** verified.
 
+## Surviving harness upgrades
+
+This bundle must never be the reason `dsh` will not start. A Loader row that
+cannot be resolved, that rejects while activating, or that waits on a service the
+harness no longer provides makes the launcher refuse to start at all, so each of
+those paths is closed here:
+
+- **DSH packages are peers, never dependencies.** A profile's pnpm-managed
+  `node_modules` entry takes precedence over the module fallback that links the
+  running installation, so a `dependencies` entry would pin this plugin — and
+  every other row resolving that name from the same hoisted directory — to the
+  copy it was built against, for the life of the profile. Declared as peers, the
+  Host half follows whichever `dsh` is running.
+- **One harness import.** The Host bundle imports `@deepseek-ai/dsh-session`
+  (`./types`, `./surface`) and `zod`, and nothing else from the harness;
+  `tests/build.spec.ts` fails on any further specifier. The compaction checkpoint
+  marker is read off the Session log rather than imported from the compaction
+  package, with `tests/compaction.spec.ts` holding that predicate equal to the
+  harness's own.
+- **Soft service binding.** `apply` binds `sessionProjections` through
+  `ctx.inject`, so an absent or renamed registry leaves the plugin inactive
+  instead of leaving the row pending, and it swallows its own failures: an
+  unusable configuration or a changed projection API costs one log line instead
+  of the harness. `tests/load-safety.spec.ts` drives all of that against the real
+  Cordis lifecycle.
+
+What remains is the Session package itself: a harness version that moves
+`@deepseek-ai/dsh-session/surface` or `./types` would leave this row
+unresolvable, and an unresolvable row does stop startup. Recovery needs no code
+change:
+
+```sh
+dsh plugin --profile <profile> remove dsh-context-snapshot-bar
+```
+
+To keep the bundle installed and disable only its row, use the profile's own
+patch layer (`$DSH_HOME/profiles/<profile>/cordis.patch.yml`), which applies
+after every bundle layer:
+
+```yaml
+- id: context-snapshot-bar
+  disabled: true
+```
+
 ## What "real time" means here
 
 The cards show **committed Session events**. A value appears once the event is in

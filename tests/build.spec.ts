@@ -57,6 +57,36 @@ describe('bundle manifest', () => {
       expect(`${dep}@${range}`).not.toMatch(/workspace:|link:|file:/)
     }
   })
+
+  it('keeps every DSH package a peer so a profile install cannot pin the harness', () => {
+    // A profile's pnpm-managed node_modules entry is authoritative over the
+    // module fallback that links the running installation, so a DSH package
+    // listed as a dependency would keep this plugin on its own copy of the
+    // harness for the life of the profile, across harness upgrades.
+    for (const dep of Object.keys(manifest.dependencies)) {
+      expect(dep.startsWith('@deepseek-ai/')).toBe(false)
+    }
+    for (const dep of ['@deepseek-ai/cordis', '@deepseek-ai/dsh-session', '@deepseek-ai/dsh-session-projection']) {
+      expect(manifest.peerDependencies[dep]).toBeDefined()
+    }
+    expect(manifest.dependencies.zod).toBeDefined()
+  })
+})
+
+describe('Host artifact', () => {
+  it('imports only the Session package at runtime', () => {
+    const bundle = read('lib/index.js')
+    const specifiers = [...bundle.matchAll(/from\s+"([^"]+)"/g)].map(match => match[1] ?? '')
+    // Each further specifier is another module a harness version can move, and a
+    // bundle that cannot resolve one leaves a fiber-less loader entry, which
+    // aborts `dsh` startup. `zod` stays external so the schema the host parses
+    // comes from one copy.
+    expect([...new Set(specifiers)].sort()).toEqual([
+      '@deepseek-ai/dsh-session/surface',
+      '@deepseek-ai/dsh-session/types',
+      'zod',
+    ])
+  })
 })
 
 describe('bundle layer', () => {
@@ -75,52 +105,11 @@ interface HostPlugin {
   apply: (ctx: unknown, config: unknown) => void
 }
 
-/** A recorded `ctx.effect` call: the callback and the label the plugin gave it. */
-interface EffectCall {
-  label: string | undefined
-  callback: () => unknown
-}
-
 describe('Host half', () => {
-  it('exports an apply that needs the projection registry before activating', async () => {
+  it('exports the Loader row surface without a hard service dependency', async () => {
     const plugin = await import('../src/index.js') as HostPlugin
     expect(plugin.name).toBe('context-snapshot-bar')
-    expect(plugin.inject).toEqual(['sessionProjections'])
     expect(typeof plugin.apply).toBe('function')
-  })
-
-  it('registers the projection as an effect so unloading releases it', async () => {
-    const plugin = await import('../src/index.js') as HostPlugin
-    const effects: EffectCall[] = []
-    let registered: { key: string, stateVersion: number } | undefined
-    const ctx = {
-      effect: (callback: () => unknown, label?: string) => {
-        effects.push({ label, callback })
-        return () => undefined
-      },
-      logger: { info: () => undefined },
-      sessionProjections: {
-        register: (definition: { key: string, stateVersion: number }) => {
-          registered = definition
-          return () => undefined
-        },
-      },
-    }
-    plugin.apply(ctx, undefined)
-    expect(effects).toHaveLength(1)
-    expect(registered).toBeUndefined()
-    effects[0]?.callback()
-    expect(registered?.key).toBe('contextSnapshotBar')
-    expect(registered?.stateVersion).toBe(1)
-  })
-
-  it('refuses an out-of-range configuration while loading', async () => {
-    const plugin = await import('../src/index.js') as HostPlugin
-    const ctx = {
-      effect: () => () => undefined,
-      logger: { info: () => undefined },
-      sessionProjections: { register: () => () => undefined },
-    }
-    expect(() => plugin.apply(ctx, { excerptChars: 4 })).toThrow(/invalid config/)
+    expect(plugin.inject).toBeUndefined()
   })
 })

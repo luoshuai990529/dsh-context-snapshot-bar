@@ -152,12 +152,24 @@ async function checkHostArtifact() {
   if (!stdout.includes('zod')) {
     fail('scripts/build.mjs: the Host build does not declare zod external, so the schemas would come from a second copy')
   }
-  // The declared dependencies must be the ones a real install must satisfy, so
-  // assert the manifest lists them rather than relying on the bundle alone.
+  // The declared ranges must be the ones a real install must satisfy, so assert
+  // the manifest lists them rather than relying on the bundle alone. DSH packages
+  // stay peers: a profile's pnpm-managed entries are authoritative over the
+  // module fallback that links the running installation, so a `dependencies`
+  // entry would pin a profile to this plugin's copy of the harness and outlive
+  // every harness upgrade.
   const manifest = JSON.parse(await readFile(`${ROOT}package.json`, 'utf8'))
-  for (const dep of ['@deepseek-ai/dsh-session', '@deepseek-ai/dsh-session-projection', 'zod']) {
-    if (manifest.dependencies?.[dep] === undefined) {
-      fail(`package.json/dependencies: ${dep} is imported by the Host bundle but not declared`)
+  for (const dep of ['@deepseek-ai/dsh-session', '@deepseek-ai/dsh-session-projection']) {
+    if (manifest.peerDependencies?.[dep] === undefined) {
+      fail(`package.json/peerDependencies: ${dep} is imported by the Host bundle but not declared`)
+    }
+  }
+  if (manifest.dependencies?.zod === undefined) {
+    fail('package.json/dependencies: zod builds the projection state schema and is not a DSH package')
+  }
+  for (const dep of Object.keys(manifest.dependencies ?? {})) {
+    if (dep.startsWith('@deepseek-ai/')) {
+      fail(`package.json/dependencies: ${dep} must be a peer, because a profile install would pin the harness copy`)
     }
   }
   if (manifest.peerDependencies?.['@deepseek-ai/cordis'] === undefined) {

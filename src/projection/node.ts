@@ -7,8 +7,8 @@
  */
 
 import { SessionSeq, type SessionEvent } from '@deepseek-ai/dsh-session/types'
-import { isCompactCheckpointSource } from '@deepseek-ai/dsh-compaction/checkpoint'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
+import { isCheckpointSource } from '../compaction-events.ts'
 import type { NodeKind, NodeView, SectionView, ToolCallView, ToolCallId } from '../shared/types.ts'
 import type { Config } from '../shared/config.ts'
 import { excerpt, excerptBlocks } from './excerpt.ts'
@@ -100,10 +100,8 @@ function kindOf(type: string, source: { kind: string, plugin?: string }): NodeKi
   if (source.kind === 'user') return 'user'
   if (source.kind === 'plugin') {
     // A compaction checkpoint stands for the messages it replaced, so it reads
-    // as the summary it is. The compaction seam owns what a checkpoint source
-    // looks like; asking it keeps a marker change from silently demoting every
-    // summary to generic injected context.
-    return isCompactCheckpointSource({ kind: 'plugin', plugin: source.plugin ?? '' })
+    // as the summary it is.
+    return isCheckpointSource({ kind: 'plugin', plugin: source.plugin ?? '' })
       ? 'summary'
       : 'injected'
   }

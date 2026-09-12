@@ -64,16 +64,26 @@ plugin must depend on it explicitly to type-check. This plugin declares it in
 
 | Package | Section | Range | Used for |
 |---|---|---|---|
-| `@deepseek-ai/dsh-session` | `dependencies` | `0.1.5-rc.2` | `SessionSeq` brand construction and the `SessionEvent` type |
-| `@deepseek-ai/dsh-session-projection` | `dependencies` | `0.1.5-rc.2` | the `ProjectionDefinition` type and the two projection tables the plugin merges into |
-| `@deepseek-ai/dsh-compaction` | `dependencies` | `0.1.5-rc.2` | type-only: it declares the `compaction/*` members of `SessionEventMap`, so the fold can narrow them |
-| `zod` | `dependencies` | `^4.6.2` | configuration validation and the wire state/view schemas |
+| `@deepseek-ai/dsh-session` | `peerDependencies` | `>=0.1.5-rc.2 <0.2.0-0` | `SessionSeq` brand construction, the `SessionEvent` type, and `deriveEventMessage` |
+| `@deepseek-ai/dsh-session-projection` | `peerDependencies` | `>=0.1.5-rc.2 <0.2.0-0` | the `ProjectionDefinition` type and the two projection tables the plugin merges into |
+| `@deepseek-ai/dsh-compaction` | `devDependencies` | `0.1.5-rc.2` | type-only: it declares the `compaction/*` members of `SessionEventMap`, and `tests/compaction.spec.ts` compares the checkpoint predicate with the package's own |
+| `zod` | `dependencies` | `^4.4.3` | configuration validation and the wire state/view schemas |
 | `@deepseek-ai/cordis` | `peerDependencies` | `^4.0.2` | the `Context` type; the Host already mounts exactly one Cordis instance |
 
-A profile install resolved every entry above from the registry with no override,
-which is the check that the published manifest is complete. `dsh-session` is the
-only DSH package the built Host bundle imports at runtime; the other DSH entries
-are type-only and are erased before bundling.
+Every DSH package is a peer, which is a startup requirement rather than a
+packaging preference: a profile's pnpm-managed `node_modules` entry takes
+precedence over the module fallback that links the running installation, so a
+DSH package listed as a dependency would keep this plugin — and any other row
+hoisted beside it — on the copy it was built against for the life of the profile,
+across harness upgrades. `zod` stays a plain dependency because it is a leaf
+library with no harness identity, and the Host consumes the projection state
+schema through its `parse` method rather than by brand.
+
+`dsh-session` is the only DSH package the built Host bundle imports at runtime
+(`./types` and `./surface`); the compaction checkpoint marker is read off the
+Session log instead, and `tests/build.spec.ts` fails on any further specifier in
+`lib/index.js`. The remaining DSH entries are type-only and erased before
+bundling.
 
 `@deepseek-ai/dsh-client-ui-conversation` and `@deepseek-ai/dsh-client-ui-session`
 are development dependencies: the Client bundle imports them type-only and

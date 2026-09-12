@@ -64,15 +64,16 @@ node -e "import('dsh-context-snapshot-bar').then(m => console.log(Object.keys(m)
 | Check | Result |
 |---|---|
 | Every declared production dependency resolved from the registry | pass — 21 packages, no overrides |
-| The Host entry point loads and exports its plugin surface | pass — `PROJECTION_KEY, apply, inject, name, resolveConfig` |
+| The Host entry point loads and exports its plugin surface | pass — `PROJECTION_KEY, apply, name, resolveConfig` |
 | The internal type-only module links resolve | pass — `PROJECTION_KEY` resolved through `./projection/index.js` |
 | `resolveConfig` accepts and defaults a configuration | pass — all six documented defaults |
 
-Inside the isolated profile the dependency closure was verified directly: `zod`
-4.6.2, `@deepseek-ai/dsh-session` 0.1.5-rc.2, `@deepseek-ai/dsh-session-projection`
-0.1.5-rc.2, and `@deepseek-ai/dsh-compaction` 0.1.5-rc.2 are all materialized at
-the profile root and resolve from the installed plugin, and the
-`@deepseek-ai/cordis` peer dependency resolves there too (4.0.2).
+Later revisions moved every DSH package to `peerDependencies`, so an install no
+longer materializes them: the profile resolves `@deepseek-ai/dsh-session` and
+`@deepseek-ai/dsh-session-projection` through the module fallback that links the
+running installation, and only `zod` and `@deepseek-ai/cordis` are resolved from
+the plugin's own tree. `docs/compatibility.md` records the policy and
+`tests/build.spec.ts` fails if a DSH package reappears under `dependencies`.
 
 ## Isolated-profile install (packaged artifact)
 

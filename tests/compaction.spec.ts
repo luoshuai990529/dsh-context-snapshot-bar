@@ -8,6 +8,8 @@
 import { describe, expect, it } from 'vitest'
 import { deriveEventMessage, type SessionEvent } from '@deepseek-ai/dsh-session'
 import { foldSurface } from '@deepseek-ai/dsh-session/surface'
+import { isCompactCheckpointSource } from '@deepseek-ai/dsh-compaction/checkpoint'
+import { isCheckpointSource } from '../src/compaction-events.ts'
 import type { AttemptPhase, BarState } from '../src/shared/types.ts'
 import { resolveConfig } from '../src/shared/config.ts'
 import { initialState, reduceEvent } from '../src/projection/state.ts'
@@ -143,6 +145,25 @@ describe('committed comparison', () => {
     const checkpoint = view.nodes.find(node => node.seq === replacement.seq)
     expect(checkpoint?.kind).toBe('summary')
     expect(view.nodes.filter(node => node.kind === 'injected')).toEqual([])
+  })
+
+  it('recognises the compaction marker the way the compaction package does', () => {
+    // The plugin reads the marker off the session log instead of importing the
+    // compaction package, because a bundle that cannot resolve a harness
+    // subpath leaves a fiber-less loader entry and aborts `dsh` startup. This
+    // test is the other half of that trade: a marker change fails here rather
+    // than silently demoting every summary to generic injected context.
+    const sources = [
+      { kind: 'plugin', plugin: 'compact' },
+      { kind: 'plugin', plugin: 'compact-other' },
+      { kind: 'plugin', plugin: '' },
+      { kind: 'plugin' },
+      { kind: 'user' },
+      { kind: 'tool' },
+    ]
+    for (const source of sources) {
+      expect(isCheckpointSource(source)).toBe(isCompactCheckpointSource(source as never))
+    }
   })
 
   it('recognises an old summary plus new messages compacted into a new summary', () => {
