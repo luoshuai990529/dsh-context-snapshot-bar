@@ -74,7 +74,30 @@ describe('digest text collection', () => {
       yield { type: 'text-delta', index: 0, text: '第二句。 ' }
       yield { type: 'block-end', index: 0 }
     })()
-    expect(await collectDigestText(chunks)).toBe('第一句。第二句。')
+    expect(await collectDigestText(chunks)).toEqual({ text: '第一句。第二句。' })
+  })
+
+  it('reads a terminal failure instead of reporting an empty answer', async () => {
+    // The harness reports an adapter or provider failure as a terminal chunk,
+    // not as a throw, so discarding it would report every cause as "no text".
+    const chunks = (async function* generate() {
+      yield { type: 'finish', reason: { kind: 'error', failure: { code: 'NO_ADAPTER', message: 'no adapter registered for provider "deepseek-official"' } } }
+    })()
+    expect(await collectDigestText(chunks)).toEqual({
+      text: '',
+      failure: 'NO_ADAPTER: no adapter registered for provider "deepseek-official"',
+    })
+  })
+
+  it('passes an aborted or capped stream through as its own failure', async () => {
+    const aborted = (async function* generate() {
+      yield { type: 'finish', reason: { kind: 'aborted', failure: { code: 'ABORTED', message: 'deadline exceeded' } } }
+    })()
+    expect(await collectDigestText(aborted)).toEqual({ text: '', failure: 'ABORTED: deadline exceeded' })
+    const capped = (async function* generate() {
+      yield { type: 'finish', reason: { kind: 'max-tokens' } }
+    })()
+    expect(await collectDigestText(capped)).toEqual({ text: '', failure: 'max-tokens: the digest reached the output cap before any text' })
   })
 })
 
@@ -151,42 +174,132 @@ describe('digest answers', () => {
       logger: { warn },
     } as unknown as Context
     const config = resolveConfig({ snapshotSummaryProvider: 'p', snapshotSummaryModel: 'm' })
-    expect(await answerDigest(failing, config, record(7)))
-      .toEqual({ status: 'unavailable', reason: 'failed' })
+    const answer = await answerDigest(failing, config, record(7))
+    expect(answer).toEqual({ status: 'unavailable', reason: 'failed', detail: 'route unavailable' })
     expect(ctx).toBeDefined()
     expect(String(warn.mock.calls[0]?.[0])).toContain('route unavailable')
   })
 })
 
 describe('digest channel', () => {
-  /** Register the channel on a fake Connection service and return its handler. */
-  function channel(config = resolveConfig({ snapshotSummaryProvider: 'p', snapshotSummaryModel: 'm' })) {
-    const handlers: ((endpoint: string, payload: unknown, signal: AbortSignal) => Promise<unknown>)[] = []
-    const ctx = {
-      inject: (_services: string[], callback: (scoped: unknown) => void) => {
-        callback({
-          connection: { rpc: { handle: (_channel: string, handler: never) => { handlers.push(handler); return () => Promise.resolve() } } },
-          effect: (callback: () => unknown) => { callback(); return () => undefined },
-          logger: { warn: () => undefined },
-          llm: { stream: () => (async function* generate() { yield { type: 'text-delta', index: 0, text: 'ok' } })() },
-        })
-      },
-      logger: { warn: () => undefined },
-    } as unknown as Context
-    registerSnapshotSummary(ctx, config)
-    expect(handlers).toHaveLength(1)
-    return handlers[0] as (endpoint: string, payload: unknown, signal: AbortSignal) => Promise<unknown>
+  /** One request the browser transport would send. */
+  function envelope(method: string, payload: unknown, rpcId = 'rpc-1'): string {
+    return JSON.stringify({ type: 'client-request', rpcId, method, payload })
   }
 
-  it('answers a well-formed request and refuses anything else', async () => {
-    const handle = channel()
-    const signal = new AbortController().signal
-    expect(await handle('other', {}, signal))
-      .toMatchObject({ ok: false })
-    expect(await handle(SUMMARY_ENDPOINT, { snapshotSeq: 'x' }, signal))
-      .toMatchObject({ ok: false })
-    expect(await handle(SUMMARY_ENDPOINT, record(8), signal))
-      .toEqual({ ok: true, value: { status: 'ready', text: 'ok', model: 'p/m' } })
+  /** A request object shaped like the node request a web route receives. */
+  function incoming(body: string, url: string, method = 'POST', headers: Record<string, string> = {}) {
+    const chunks = [Buffer.from(body, 'utf8')]
+    return {
+      method,
+      url,
+      headers: { 'content-type': 'application/json', ...headers },
+      [Symbol.asyncIterator]: () => {
+        let index = 0
+        return {
+          next: () => Promise.resolve(index < chunks.length
+            ? { done: false as const, value: chunks[index++] }
+            : { done: true as const, value: undefined }),
+        }
+      },
+    }
+  }
+
+  /** A response object that records what the route wrote. */
+  function outgoing() {
+    const written: { status?: number, body?: string | undefined } = {}
+    return {
+      written,
+      writeHead: (status: number) => { written.status = status; return undefined },
+      end: (body?: string) => { written.body = body; return undefined },
+    }
+  }
+
+  /**
+   * Register the digest against a Connection service and a web server that
+   * behave like the real ones: the route is mounted by this plugin, and
+   * Connection's fence is consulted before dispatch.
+   */
+  function channel(options: { rejection?: number } = {}, config = resolveConfig({ snapshotSummaryProvider: 'p', snapshotSummaryModel: 'm' })) {
+    const routes: { kind: string, path: string, handler: (req: never, res: never) => Promise<void> }[] = []
+    const warnings: string[] = []
+    let injected: readonly string[] = []
+    const ctx = {
+      inject: (services: string[], callback: (scoped: unknown) => void) => {
+        injected = services
+        callback({
+          effect: (callback: () => unknown) => { callback(); return () => undefined },
+          logger: { warn: (line: string) => { warnings.push(line) } },
+          llm: { stream: () => (async function* generate() { yield { type: 'text-delta', index: 0, text: 'ok' } })() },
+          connection: { requestRejection: () => options.rejection },
+          webServer: {
+            register: (route: { kind: string, path: string, handler: (req: never, res: never) => Promise<void> }) => {
+              routes.push(route)
+              return () => Promise.resolve()
+            },
+          },
+        })
+      },
+      logger: { warn: (line: string) => { warnings.push(line) } },
+    } as unknown as Context
+    registerSnapshotSummary(ctx, config)
+    return {
+      routes,
+      warnings,
+      injected,
+      async request(body: string, url = `${SUMMARY_CHANNEL}/${SUMMARY_ENDPOINT}`, method = 'POST') {
+        const res = outgoing()
+        await routes[0]?.handler(incoming(body, url, method) as never, res as never)
+        return res.written
+      },
+    }
+  }
+
+  it('mounts its own route on the web server it injects', () => {
+    // The route is this plugin's, not Connection's: `connection.rpc.handle`
+    // reaches `webServer` through the Connection service's own context, which
+    // never injects it, so a registration from another fiber throws and serves
+    // nothing — the browser then hits the static handler's 405.
+    const registered = channel()
+    expect(registered.injected).toContain('webServer')
+    expect(registered.routes.map(route => route.path)).toEqual([SUMMARY_CHANNEL])
+    expect(registered.warnings).toEqual([])
+  })
+
+  it('applies the Connection fence before answering', async () => {
+    const refused = channel({ rejection: 401 })
+    await refused.request(envelope(SUMMARY_ENDPOINT, record(20)))
+    expect(refused.routes).toHaveLength(1)
+    const denied = channel({ rejection: 403 })
+    const answer = await denied.request(envelope(SUMMARY_ENDPOINT, record(21)))
+    expect(answer.status).toBe(403)
+  })
+
+  it('answers the browser transport envelope the Client sends', async () => {
+    const { request } = channel()
+    const answer = await request(envelope(SUMMARY_ENDPOINT, record(22)))
+    expect(answer.status).toBe(200)
+    expect(JSON.parse(answer.body ?? '{}')).toEqual({
+      type: 'server-response',
+      rpcId: 'rpc-1',
+      result: { ok: true, value: { status: 'ready', text: 'ok', model: 'p/m' } },
+    })
+  })
+
+  it('refuses an unknown endpoint, a bad envelope, and a foreign path', async () => {
+    const { request } = channel()
+    const unknown = JSON.parse((await request(envelope('other', record(23)), `${SUMMARY_CHANNEL}/other`)).body ?? '{}')
+    expect(unknown.result).toMatchObject({ ok: false })
+    expect((await request('not json')).status).toBe(400)
+    expect((await request(envelope(SUMMARY_ENDPOINT, record(24), 'x'), `${SUMMARY_CHANNEL}/other`)).status).toBe(400)
+    expect((await request(envelope(SUMMARY_ENDPOINT, record(25)), '/elsewhere/snapshot-summary')).status).toBe(404)
+    expect((await request(envelope(SUMMARY_ENDPOINT, record(26)), `${SUMMARY_CHANNEL}/${SUMMARY_ENDPOINT}`, 'GET')).status).toBe(404)
+  })
+
+  it('refuses a payload that is not a digest request', async () => {
+    const { request } = channel()
+    const answer = JSON.parse((await request(envelope(SUMMARY_ENDPOINT, { snapshotSeq: 'x' }))).body ?? '{}')
+    expect(answer.result).toMatchObject({ ok: false })
   })
 
   it('stays inert when the Client Connection service is absent', () => {

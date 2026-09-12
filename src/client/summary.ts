@@ -36,7 +36,7 @@ export type SummaryState =
   | { readonly status: 'idle' }
   | { readonly status: 'loading' }
   | { readonly status: 'ready', readonly text: string, readonly model: string }
-  | { readonly status: 'unavailable', readonly reason: SummaryUnavailableReason }
+  | { readonly status: 'unavailable', readonly reason: SummaryUnavailableReason, readonly detail?: string }
 
 /** Shared idle value, so an unchanged state keeps its reference and re-renders nothing. */
 const IDLE: SummaryState = { status: 'idle' }
@@ -54,7 +54,11 @@ function readResponse(result: unknown): SummaryState {
   if (value.status === 'ready' && typeof value.text === 'string' && typeof value.model === 'string') {
     return { status: 'ready', text: value.text, model: value.model }
   }
-  if (value.status === 'unavailable') return { status: 'unavailable', reason: value.reason }
+  if (value.status === 'unavailable') {
+    return typeof value.detail === 'string' && value.detail !== ''
+      ? { status: 'unavailable', reason: value.reason, detail: value.detail }
+      : { status: 'unavailable', reason: value.reason }
+  }
   return { status: 'unavailable', reason: 'failed' }
 }
 

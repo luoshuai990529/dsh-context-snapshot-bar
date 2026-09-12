@@ -73,6 +73,13 @@ rather than leaving a Loader entry pending, which would abort `dsh` startup. The
 digest is the plugin's only model call; it sends the section text the card shows,
 which DSH already includes in every request.
 
+The route is mounted on `webServer` rather than through `connection.rpc.handle`:
+that helper reaches `webServer` through the Connection service's own context, which
+never injects it, so a registration from any other fiber throws
+`cannot get property "webServer" without inject` and serves nothing. The Client
+still calls the channel through the Connection transport, so the wire protocol is
+unchanged.
+
 ## Runtime dependency policy
 
 | Package | Section | Range | Used for |

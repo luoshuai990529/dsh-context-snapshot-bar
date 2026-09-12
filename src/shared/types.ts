@@ -191,6 +191,14 @@ export type SnapshotSummaryResponse =
     readonly status: 'unavailable'
     /** Why, as a short machine-readable reason the card localizes. */
     readonly reason: 'disabled' | 'unconfigured' | 'failed'
+    /**
+     * What the Host observed, for the `failed` reason.
+     *
+     * The card shows it under the localized line: a silent "failed" tells a
+     * reader nothing about whether the route, the key, or the request was the
+     * problem.
+     */
+    readonly detail?: string
   }
 
 /** One indexed surface position: a derived node view, or a position a later replacement may fill. */

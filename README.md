@@ -156,7 +156,9 @@ is a deployment choice:
 ```
 
 Without a route, or with `snapshotSummaryEnabled: false`, the card states why the
-digest is missing and still shows the raw record. A failed or slow call is
+digest is missing and still shows the raw record. A failed call says what the Host
+observed under that line, so a missing route, a rejected key, and a refused request
+do not all read as "failed". A failed or slow call is
 reported once in the Host log and leaves the raw record on screen.
 
 The digest is written from the same section text the card displays, which DSH

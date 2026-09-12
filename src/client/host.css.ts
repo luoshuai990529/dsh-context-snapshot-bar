@@ -73,4 +73,15 @@ export const hostCss = `
   font-size: 11.5px;
   line-height: 1.5;
 }
+
+/* What the Host observed, for a reader who has to tell a missing route from a
+   rejected key: monospaced so it reads as a diagnostic, not as the digest. */
+.dsh-context-snapshot-bar .digest-detail {
+  margin: 0;
+  color: var(--danger, #b4232a);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  word-break: break-word;
+}
 `

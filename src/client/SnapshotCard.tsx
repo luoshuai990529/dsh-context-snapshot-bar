@@ -108,7 +108,14 @@ export function SnapshotCard({ view, t, summary = { status: 'idle' } }: Snapshot
               {summary.status === 'loading' ? <p className={cls('digest-note')}>{t('snapshot.digest.loading')}</p> : null}
               {summary.status === 'ready' ? <p className={cls('digest-text')}>{summary.text}</p> : null}
               {summary.status === 'unavailable'
-                ? <p className={cls('digest-note')}>{t(DIGEST_REASON_KEYS[summary.reason])}</p>
+                ? (
+                    <>
+                      <p className={cls('digest-note')}>{t(DIGEST_REASON_KEYS[summary.reason])}</p>
+                      {summary.detail === undefined
+                        ? null
+                        : <p className={cls('digest-detail')}>{summary.detail}</p>}
+                    </>
+                  )
                 : null}
               {summary.status === 'ready'
                 ? <p className={cls('digest-note')}>{t('snapshot.digest.model', { model: summary.model })}</p>
