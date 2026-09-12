@@ -27,13 +27,10 @@
 
 ## 快速安装
 
-需要已安装的 DSH，以及用于构建插件的 pnpm。以下命令在插件源码目录执行；已有 `.tgz` 安装包时，可跳过前三步。
+已安装 DSH 后，可直接从 [npm](https://www.npmjs.com/package/dsh-context-snapshot-bar) 安装，无需下载源码或手动构建：
 
 ```sh
-pnpm install
-pnpm run build
-pnpm run pack
-dsh plugin --profile web add ./artifacts/dsh-context-snapshot-bar-0.2.0.tgz
+dsh plugin --profile web add dsh-context-snapshot-bar@0.2.0
 dsh --profile web --dump-config
 ```
 
@@ -45,7 +42,7 @@ dsh --profile web
 
 若该服务正在运行，先停止旧进程再启动；使用启动器新输出的地址打开 Web。进入会话后，点击输入框上方的快照入口打开右侧栏。
 
-使用自定义 Web profile 时，将命令中的 `web` 替换为实际名称。此处使用本地安装包，不假定 npm 上已有公开发布版本。
+使用自定义 Web profile 时，将命令中的 `web` 替换为实际名称。需要修改或从源码构建时，参见[开发指南](docs/guide.md#development)。
 
 ## 其他说明
 

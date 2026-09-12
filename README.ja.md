@@ -27,13 +27,10 @@ DeepSeek Harness が現在保持しているコンテキストを可視化しま
 
 ## クイックスタート
 
-DSH を事前にインストールしてください。プラグインのビルドには pnpm が必要です。以下はプラグインのソースディレクトリで実行します。`.tgz` パッケージがある場合、最初の3つの手順は省略できます。
+DSH のインストール後、[npm](https://www.npmjs.com/package/dsh-context-snapshot-bar) から直接インストールできます。ソースコードの取得や手動ビルドは不要です。
 
 ```sh
-pnpm install
-pnpm run build
-pnpm run pack
-dsh plugin --profile web add ./artifacts/dsh-context-snapshot-bar-0.2.0.tgz
+dsh plugin --profile web add dsh-context-snapshot-bar@0.2.0
 dsh --profile web --dump-config
 ```
 
@@ -45,7 +42,7 @@ dsh --profile web
 
 すでに起動している場合は、既存のプロセスを停止してから実行してください。起動時に表示された新しい URL を開き、会話の入力欄上部にあるスナップショットの入口を選択すると、サイドバーが開きます。
 
-独自の Web profile を使用する場合は、`web` をその名前に置き換えてください。この手順はローカルパッケージを使うもので、npm での公開を前提としていません。
+独自の Web profile を使用する場合は、`web` をその名前に置き換えてください。ソースコードの変更やビルドについては、[開発ガイド](docs/guide.md#development)を参照してください。
 
 ## 補足
 

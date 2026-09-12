@@ -27,13 +27,10 @@ The dependency range is not a tested compatibility range. Other DSH versions hav
 
 ## Quick start
 
-Install DSH first; pnpm is needed to build the plugin. Run these commands from the plugin source directory. If you already have a `.tgz` package, skip the first three steps.
+With DSH installed, install directly from [npm](https://www.npmjs.com/package/dsh-context-snapshot-bar). No source checkout or manual build is required:
 
 ```sh
-pnpm install
-pnpm run build
-pnpm run pack
-dsh plugin --profile web add ./artifacts/dsh-context-snapshot-bar-0.2.0.tgz
+dsh plugin --profile web add dsh-context-snapshot-bar@0.2.0
 dsh --profile web --dump-config
 ```
 
@@ -45,7 +42,7 @@ dsh --profile web
 
 If the service is running, stop the old process first. Open the fresh URL printed by the launcher. In a session, select the snapshot entry above the composer to open the sidebar.
 
-For a custom Web profile, replace `web` with its name. These instructions use a local package and do not assume a public npm release exists.
+For a custom Web profile, replace `web` with its name. To modify or build the plugin from source, see the [development guide](docs/guide.md#development).
 
 ## Other notes
 
