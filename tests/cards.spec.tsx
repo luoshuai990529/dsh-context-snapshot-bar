@@ -107,6 +107,25 @@ describe('SnapshotCard digest', () => {
     expect(document.querySelector('.snapshot-raw')?.textContent).toContain('DSH file policy: workspace-write')
   })
 
+  it('reads the digest as one item per stored record', () => {
+    render(<SnapshotCard
+      view={recorded}
+      t={t}
+      summary={{
+        status: 'ready',
+        text: '- 文件沙箱策略：允许在工作区内自由读写。\n\n· 审批策略：本会话不询问，需要审批的操作直接拒绝。\n',
+        model: 'p/m',
+      }}
+    />)
+    const items = [...document.querySelectorAll('.digest-list .digest-item')]
+    expect(items).toHaveLength(2)
+    // The card supplies the list, so the model's own markers are dropped rather
+    // than shown twice, and each line names what it describes.
+    expect(items[0]?.textContent).toBe('文件沙箱策略：允许在工作区内自由读写。')
+    expect(items[1]?.textContent).toBe('审批策略：本会话不询问，需要审批的操作直接拒绝。')
+    expect(document.querySelector('.digest-list')?.querySelectorAll('li')).toHaveLength(2)
+  })
+
   it('draws the digest states without disturbing the raw record', () => {
     const { unmount } = render(<SnapshotCard view={recorded} t={t} summary={{ status: 'loading' }} />)
     expect(document.querySelector('.snapshot-digest')?.textContent).toContain('正在生成摘要')

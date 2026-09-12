@@ -50,8 +50,8 @@ expand/collapse control is the host Sidebar's. The tab type registers once:
   turn made — instead of inventing a figure.
 - **Context snapshot** (`context-snapshot-bar-snapshot`) — the latest committed
   runtime-context record, drawn as two separate answers to "what is in this
-  snapshot". The **content digest** (a model-written description of what the
-  record holds, in the language the card is speaking) sits above, in its own
+  snapshot". The **content digest** (one model-written line per stored record,
+  in the language the card is speaking) sits above, in its own
   accented block; the **raw record** (DSH's own state text, verbatim, under its
   producer's names) sits below a divider, with its standing and a copy action.
   The digest never replaces the raw text: it is an aid for reading it.
@@ -141,6 +141,13 @@ The digest is one auxiliary model call per distinct snapshot record and
 language, cached in the Host process, so reopening the card costs nothing and
 two Sessions that recorded the same text share one answer. It is asked for only
 while the runtime-snapshot tab is on screen.
+
+The instruction asks for exactly one line per stored record, in order, and
+nothing around them: no preamble, no heading, no closing recommendation, no
+Markdown. The card draws those lines as a list and strips any marker the model
+adds anyway, and each line names what it describes, so nothing has to be paired
+with the record below it. `DIGEST_FORMAT` is part of the cache key, so changing
+the instruction cannot serve an answer in the old shape.
 
 Configure the route on the plugin's row; there is no default, because the model
 is a deployment choice:

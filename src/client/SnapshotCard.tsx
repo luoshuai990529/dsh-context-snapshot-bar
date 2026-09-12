@@ -10,7 +10,7 @@ import { useEffect, useState } from 'react'
 import type { BarView, SectionView, SnapshotStatus, SnapshotView } from '../shared/types.ts'
 import type { SummaryState, SummaryUnavailableReason } from './summary.ts'
 import type { ContextSnapshotBarKey, TranslateBar } from './locales.ts'
-import { SCOPE, cls, hasSectionLabel, sectionLabel } from './display.ts'
+import { SCOPE, cls, digestLines, hasSectionLabel, sectionLabel } from './display.ts'
 import { commitIdentity } from './motion.ts'
 
 /** Props for the snapshot card. */
@@ -106,7 +106,17 @@ export function SnapshotCard({ view, t, summary = { status: 'idle' } }: Snapshot
             <section className={cls('snapshot-digest')} aria-label={t('snapshot.digestCaption')}>
               <p className={cls('digest-caption')}>{t('snapshot.digestCaption')}</p>
               {summary.status === 'loading' ? <p className={cls('digest-note')}>{t('snapshot.digest.loading')}</p> : null}
-              {summary.status === 'ready' ? <p className={cls('digest-text')}>{summary.text}</p> : null}
+              {summary.status === 'ready'
+                ? (
+                    <ul className={cls('digest-list')}>
+                      {digestLines(summary.text).map((line, index) => (
+                        // Each line names what it describes, so the list needs no
+                        // label of its own and no pairing with the record's entries.
+                        <li className={cls('digest-item')} key={`${String(index)}-${line.slice(0, 24)}`}>{line}</li>
+                      ))}
+                    </ul>
+                  )
+                : null}
               {summary.status === 'unavailable'
                 ? (
                     <>

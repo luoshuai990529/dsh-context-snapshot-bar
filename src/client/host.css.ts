@@ -58,13 +58,26 @@ export const hostCss = `
   letter-spacing: 0.02em;
 }
 
-.dsh-context-snapshot-bar .digest-text {
+/* One item per stored record, so the digest reads as an inventory of the
+   snapshot rather than as prose about it. */
+.dsh-context-snapshot-bar .digest-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
   margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dsh-context-snapshot-bar .digest-item {
   color: var(--fg);
   font-family: var(--font-body);
   font-size: 12.5px;
   line-height: 1.6;
-  white-space: pre-wrap;
+}
+
+.dsh-context-snapshot-bar .digest-item::marker {
+  content: '';
 }
 
 .dsh-context-snapshot-bar .digest-note {

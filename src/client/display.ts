@@ -63,3 +63,21 @@ export function sectionLabel(name: string, t: (key: ContextSnapshotBarKey) => st
 export function hasSectionLabel(name: string): boolean {
   return SECTION_LABELS[name] !== undefined
 }
+
+/**
+ * Split a digest into the lines it is meant to be read as.
+ *
+ * The Host asks for one line per snapshot entry and nothing else, but a model
+ * can still wrap a line, prefix a marker, or leave a blank one, so the card
+ * normalizes instead of trusting the shape: blank lines are dropped and a
+ * leading list marker is removed, because the card supplies its own list.
+ *
+ * @param text - the digest as the Host answered it.
+ * @returns the non-empty lines, in order.
+ */
+export function digestLines(text: string): readonly string[] {
+  return text
+    .split('\n')
+    .map(line => line.trim().replace(/^[-*•·]\s+/, '').trim())
+    .filter(line => line !== '')
+}
