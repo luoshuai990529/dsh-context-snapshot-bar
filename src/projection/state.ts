@@ -196,7 +196,7 @@ function foldSurfaceEvent(state: BarState, event: SessionEvent, config: Config):
         : nodeFromEvent(event, config, [], { turn: state.turn, step: state.step }),
   }
   const before = removed.flatMap(item => item.message === null ? [] : [item.message])
-  const settled = settleCompaction(state, event, before, entry, config)
+  const settled = settleCompaction(state, event, removed, entry, config)
   return {
     ...state,
     surface: [...state.surface.slice(0, startIdx), entry, ...state.surface.slice(endIdx + 1)],
@@ -302,7 +302,7 @@ function foldToolCall(
 function settleCompaction(
   state: BarState,
   event: SessionEvent,
-  before: readonly NodeView[],
+  removed: readonly SurfaceEntry[],
   entry: SurfaceEntry,
   config: Config,
 ): { pending: readonly PendingCompaction[], compression: BarState['latestCompression'] } {
@@ -310,14 +310,20 @@ function settleCompaction(
   if (sourceSeqs === undefined || sourceSeqs.length === 0 || state.pending.length === 0) {
     return { pending: state.pending, compression: null }
   }
-  const removed = new Set(before.map(node => node.seq as number))
+  // The recorded shadow set names surface entries, not view nodes: a position
+  // whose message an empty-content record projects to null still occupies the
+  // surface and still appears in the set, so matching on nodes misses it and
+  // leaves the compaction unrecorded.
+  const removedSeqs = new Set(removed.map(item => item.seq as number))
   const matchIdx = state.pending.findIndex(pending =>
-    pending.shadowedSeqs.length === removed.size
-    && pending.shadowedSeqs.every(seq => removed.has(seq as number)))
+    pending.shadowedSeqs.length === removedSeqs.size
+    && pending.shadowedSeqs.every(seq => removedSeqs.has(seq as number)))
   if (matchIdx === -1) return { pending: state.pending, compression: null }
   const pending = state.pending[matchIdx] as PendingCompaction
   const checkpoint = entry.message ?? nodeFromEvent(event, config, [], { turn: state.turn, step: state.step })
-  const kept = before.slice(Math.max(0, before.length - config.comparisonNodeLimit))
+  const nodes = removed.flatMap(item => item.message === null ? [] : [item.message])
+  const kept = nodes.slice(Math.max(0, nodes.length - config.comparisonNodeLimit))
+  const turns = nodes.flatMap(node => node.turn === null ? [] : [node.turn])
   return {
     pending: state.pending.filter((_, index) => index !== matchIdx),
     compression: {
@@ -325,8 +331,12 @@ function settleCompaction(
       generatedExcerpt: pending.summaryExcerpt,
       checkpoint,
       before: kept,
-      beforeCount: before.length,
-      omittedBeforeCount: before.length - kept.length,
+      beforeCount: nodes.length,
+      omittedBeforeCount: nodes.length - kept.length,
+      // The span describes what the replacement removed, not what the bounded
+      // list still shows: the display limit keeps the newest replaced nodes.
+      beforeFirstTurn: turns.length === 0 ? null : Math.min(...turns),
+      beforeLastTurn: turns.length === 0 ? null : Math.max(...turns),
     },
   }
 }

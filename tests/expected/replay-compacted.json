@@ -103,7 +103,9 @@
       }
     ],
     "beforeCount": 2,
-    "omittedBeforeCount": 0
+    "omittedBeforeCount": 0,
+    "beforeFirstTurn": 1,
+    "beforeLastTurn": 1
   },
   "attempt": "completed",
   "latestChange": {

@@ -33,9 +33,14 @@ expand/collapse control is the host Sidebar's. The tab type registers once:
 - **Message trajectory** — the retained context read **turn first**: newest turn
   on top, each turn a card that opens into its tool cycles (and each cycle into
   the call's arguments and the seqs pairing it with its result) plus its final
-  conclusion. The compaction attempt appears as one inline process line; a
-  committed compaction stands a **summary group** in for the turns it replaced,
-  and the archived copies of those turns open inside it. Turn-token estimates
+  conclusion. A compaction is a point in that timeline, so it is drawn where it
+  landed: the **summary group** sits between the turns newer than the
+  replacement and the turns it stands for, and the archived copies of those
+  turns open inside it. The group names the span it replaced and how many
+  messages it took, and says how many of them the display limit kept — a long
+  session's replaced turns are far more than one card can carry. An attempt that
+  has not committed a replacement yet is still "now", so only that one appears
+  as a process line at the newest end. Turn-token estimates
   are deliberately absent: the prototype's numbers are sample data and the
   projection carries none, so the card states what it knows — how many calls a
   turn made — instead of inventing a figure.
@@ -142,7 +147,7 @@ its own omitted count.
   the committed excerpt, or the waiting state while none has committed.
 - The trajectory card reproduces the prototype's shell (toggle with glyph, role
   strip and state; detail with the intro and status pill, the track of turn
-  segments, the attempt marker, the comparison and the replay note), and drops
+  segments, the inline compaction group and the replay note), and drops
   the prototype's own dead `overviewMarkup` strip, which the design file defines
   but never renders.
 - Motion follows the brief: a first look shows the record as it stands, and a

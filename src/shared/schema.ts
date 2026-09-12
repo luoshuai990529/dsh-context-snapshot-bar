@@ -112,6 +112,8 @@ export const compressionViewSchema: z.ZodType<CompressionView> = z.object({
   before: z.array(nodeViewSchema),
   beforeCount: z.number(),
   omittedBeforeCount: z.number(),
+  beforeFirstTurn: z.number().nullable(),
+  beforeLastTurn: z.number().nullable(),
 })
 
 /** Schema for {@link ChangeView}. */

@@ -62,6 +62,14 @@ export interface LogBuilder {
   /** Append the system prompt as surface node 0. */
   systemPrompt: (text: string) => SessionEvent
   /**
+   * Replace one current surface node with an empty system-message record.
+   *
+   * The system-prompt producer commits this when a request carries no system
+   * prompt: the record occupies a surface position and derives no model message,
+   * so a shadow set counts one entry more than the derived nodes do.
+   */
+  blankSystemPrompt: (nodeSeq: number, turn: number, step: number) => SessionEvent
+  /**
    * Append a human prompt.
    *
    * `turn`/`step` are optional because the loop appends `user/message` with the
@@ -158,6 +166,20 @@ export function logBuilder(id = 'session-fixture'): LogBuilder {
       'system/message',
       { turn: 1, step: 1, message: createSystemMessage(value, SNAPSHOT_PLUGIN) },
       { surfaceOp: 'append' },
+    ),
+    blankSystemPrompt: (nodeSeq, turn, step) => append(
+      'system/message',
+      {
+        turn,
+        step,
+        message: {
+          role: 'system',
+          content: [],
+          source: { kind: 'plugin', plugin: SNAPSHOT_PLUGIN },
+          id: `blank-${String(nodeSeq)}`,
+        },
+      },
+      { surfaceOp: { op: 'replace', startSeq: nodeSeq, endSeq: nodeSeq }, sourceEventSeqs: [nodeSeq] },
     ),
     userMessage: (value, turn, step) => append(
       'user/message',

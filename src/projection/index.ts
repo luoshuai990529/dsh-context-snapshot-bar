@@ -16,7 +16,7 @@ import { toView } from './view.js'
 export const PROJECTION_KEY = 'contextSnapshotBar'
 
 /** Bumped whenever the persisted state fields or the fold semantics change. */
-const STATE_VERSION = 1
+const STATE_VERSION = 2
 
 /**
  * Assemble the projection definition for one resolved configuration.

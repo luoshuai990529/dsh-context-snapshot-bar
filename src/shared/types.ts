@@ -101,6 +101,10 @@ export interface CompressionView {
   beforeCount: number
   /** Replaced nodes omitted from {@link before} by the display limit. */
   omittedBeforeCount: number
+  /** First turn the replacement removed a message from, or null when none carried one. */
+  beforeFirstTurn: number | null
+  /** Last turn the replacement removed a message from, or null when none carried one. */
+  beforeLastTurn: number | null
 }
 
 /** The most recent committed surface change the Client may animate. */

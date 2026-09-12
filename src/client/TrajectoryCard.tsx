@@ -181,11 +181,36 @@ export function TrajectoryCard({ view, t }: TrajectoryCardProps) {
   // The list reads newest first: the round list is ordered by recency, not by
   // the model's own message order, and the prototype says so in its footnote.
   const ordered = [...retained].reverse()
+  // A committed replacement belongs to the timeline at the point it landed, so
+  // it is drawn between the turns newer than it and the turns it stands for. An
+  // attempt with no committed replacement is still "now", so its leaf stays at
+  // the newest end, and a committed one is not announced twice.
+  const compactionTurn = compression === null
+    ? null
+    : compression.checkpoint.turn ?? compression.beforeLastTurn
+  const newerTurns = compactionTurn === null ? ordered : ordered.filter(turn => turn.turn > compactionTurn)
+  const olderTurns = compactionTurn === null ? [] : ordered.filter(turn => turn.turn <= compactionTurn)
+  const showAttempt = compression === null || phase !== 'completed'
   const newest = ordered[0]
   const oldest = ordered.at(-1)
   const stateLine = compression === null
     ? t('trajectory.state.turns', { to: String(newest?.turn ?? '—'), from: String(oldest?.turn ?? '—') })
     : t('trajectory.state.summary', { turn: String(newest?.turn ?? '—') })
+
+  const renderTurn = (turn: Turn) => (
+    <TurnCard
+      key={turn.turn}
+      turn={turn}
+      nodes={nodes}
+      prunedSeq={prunedSeq}
+      archived={false}
+      open={openTurns.has(String(turn.turn))}
+      openCalls={openCalls}
+      onToggleTurn={() => { toggle(setOpenTurns, String(turn.turn)) }}
+      onToggleCycle={key => { toggle(setOpenCalls, key) }}
+      t={t}
+    />
+  )
 
   const toggle = (set: (next: (current: ReadonlySet<string>) => ReadonlySet<string>) => void, key: string): void => {
     set(current => {
@@ -223,23 +248,10 @@ export function TrajectoryCard({ view, t }: TrajectoryCardProps) {
             <span>{t('trajectory.roundIntro.right')}</span>
           </div>
           <div className={cls('round-list')}>
-            {MARKED_PHASES.has(phase)
+            {MARKED_PHASES.has(phase) && showAttempt
               ? <LeafRow first={t('trajectory.marker.inline')} second={t(ATTEMPT_KEYS[phase])} kind={cls('compression-event', phase === 'failed' && 'failed')} />
               : null}
-            {ordered.map(turn => (
-              <TurnCard
-                key={turn.turn}
-                turn={turn}
-                nodes={nodes}
-                prunedSeq={prunedSeq}
-                archived={false}
-                open={openTurns.has(String(turn.turn))}
-                openCalls={openCalls}
-                onToggleTurn={() => { toggle(setOpenTurns, String(turn.turn)) }}
-                onToggleCycle={key => { toggle(setOpenCalls, key) }}
-                t={t}
-              />
-            ))}
+            {newerTurns.map(turn => renderTurn(turn))}
             {compression === null ? null : (
               <SummaryGroup
                 compression={compression}
@@ -256,6 +268,7 @@ export function TrajectoryCard({ view, t }: TrajectoryCardProps) {
                 t={t}
               />
             )}
+            {olderTurns.map(turn => renderTurn(turn))}
             {anchors.map(node => (
               <LeafRow
                 key={node.seq}
@@ -436,9 +449,12 @@ function SummaryGroup({
   onToggleSummary, onToggleArchive, onToggleTurn, onToggleCycle, t,
 }: SummaryGroupProps) {
   const seqs = compression.before.map(node => Number(node.seq))
-  const first = archived[0]?.turn
-  const last = archived.at(-1)?.turn
-  const span = first === undefined || last === undefined
+  // The span describes the range the replacement removed; the display limit can
+  // keep only its newest nodes, and the second line says how many it kept.
+  const first = compression.beforeFirstTurn
+  const last = compression.beforeLastTurn
+  const opened = archived[0]?.turn
+  const span = first === null || last === null
     ? t('trajectory.summary.entry', { turns: '—' })
     : t('trajectory.summary.entry', { turns: first === last ? String(first) : `${first}–${last}` })
   return (
@@ -452,6 +468,9 @@ function SummaryGroup({
         <span className={cls('trace-line')}>{span}</span>
         <span className={cls('trace-line', 'secondary')}>
           {t('trajectory.summary.facts', { count: compression.beforeCount })}
+          {compression.omittedBeforeCount === 0
+            ? null
+            : ` · ${t('trajectory.summary.omitted', { count: compression.omittedBeforeCount })}`}
         </span>
       </button>
       {open ? (
@@ -465,8 +484,8 @@ function SummaryGroup({
           <button type="button" className={cls('trace-leaf', 'archive-toggle')} aria-expanded={archiveOpen} onClick={onToggleArchive}>
             <span className={cls('trace-line')}>
               {archiveOpen
-                ? t('trajectory.archive.hide', { turn: first === undefined ? '—' : String(first) })
-                : t('trajectory.archive.show', { turn: first === undefined ? '—' : String(first) })}
+                ? t('trajectory.archive.hide', { turn: opened === undefined ? '—' : String(opened) })
+                : t('trajectory.archive.show', { turn: opened === undefined ? '—' : String(opened) })}
             </span>
             <span className={cls('trace-line', 'secondary')}>{t('trajectory.archive.keep')}</span>
           </button>

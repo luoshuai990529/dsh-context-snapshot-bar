@@ -147,6 +147,34 @@ describe('committed comparison', () => {
     expect(view.nodes.filter(node => node.kind === 'injected')).toEqual([])
   })
 
+  it('records a compaction whose replaced span holds a record deriving no message', () => {
+    // The system-prompt producer blanks its own record with an empty system
+    // message: the position stays on the surface and derives no model message, so
+    // the recorded shadow set counts one entry more than the derived nodes do.
+    // Matching the two as node sets left this whole compaction unrecorded, which
+    // is what hid every replaced turn from the trajectory card.
+    const builder = logBuilder('session-compaction-blank')
+    builder.systemPrompt('system')
+    builder.turnStart(1)
+    builder.stepStart(1, 1)
+    const question = builder.userMessage('first question', 1, 1)
+    builder.assistantMessage('first answer', 1, 1)
+    builder.turnEnd(1)
+    const reissued = builder.systemPrompt('system, second issue')
+    const blanked = builder.blankSystemPrompt(Number(reissued.seq), 1, 1)
+    const replacement = builder.compact(Number(question.seq), Number(blanked.seq), 'summarized')
+
+    const view = toView(stateOf(builder), CONFIG)
+    expect(view.latestCompression?.checkpoint.seq).toBe(replacement.seq)
+    expect(view.latestCompression?.checkpoint.kind).toBe('summary')
+    // Two messages were replaced; the blanked record contributes no message.
+    expect(view.latestCompression?.beforeCount).toBe(2)
+    expect(view.latestCompression?.before.map(node => node.excerpt))
+      .toEqual(['first question', 'first answer'])
+    expect(view.latestCompression?.beforeFirstTurn).toBe(1)
+    expect(view.latestCompression?.beforeLastTurn).toBe(1)
+  })
+
   it('recognises the compaction marker the way the compaction package does', () => {
     // The plugin reads the marker off the session log instead of importing the
     // compaction package, because a bundle that cannot resolve a harness

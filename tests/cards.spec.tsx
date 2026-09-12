@@ -177,6 +177,51 @@ describe('TrajectoryCard', () => {
     expect(document.querySelector('.compression-event')?.className).toContain('failed')
   })
 
+  it('draws a committed compaction where the replacement landed, not at the top', () => {
+    // The compression is a point in the timeline: turns newer than it stay above,
+    // the turns it stands for stay below, and a recorded replacement is not also
+    // announced by the attempt marker at the newest end.
+    // The replacement committed during turn 2, so turn 2 keeps the messages that
+    // followed it: turns 3 and 4 above the compression, turn 2 below.
+    const nodes = [
+      node(22, { kind: 'user', turn: 2, excerpt: 'second question' }),
+      node(20, { kind: 'user', turn: 3, excerpt: 'third question' }),
+      node(21, { kind: 'assistant', turn: 3, excerpt: 'third answer' }),
+      node(30, { kind: 'user', turn: 4, excerpt: 'fourth question' }),
+      node(31, { kind: 'assistant', turn: 4, excerpt: 'fourth answer' }),
+    ]
+    render(<TrajectoryCard view={view({
+      nodes,
+      totalMessages: 6,
+      attempt: 'completed',
+      latestCompression: {
+        replacementSeq: 25 as BarView['nodes'][number]['seq'],
+        generatedExcerpt: 'the first two messages, summarized',
+        checkpoint: node(25, { kind: 'summary', turn: 2, excerpt: 'condensed' }),
+        before: [node(10, { kind: 'user', turn: 1 }), node(11, { kind: 'assistant', turn: 1 })],
+        beforeCount: 2,
+        omittedBeforeCount: 0,
+        beforeFirstTurn: 1,
+        beforeLastTurn: 1,
+      },
+    })} t={t} />)
+    const order = [...document.querySelectorAll('.round-list > *')].map((element) => {
+      if (element.classList.contains('summary-group')) return 'compaction'
+      return element.querySelector('.turn-question')?.textContent ?? element.className
+    })
+    // Fourth and third turns are newer than the replacement; the turn it committed
+    // in follows it, and the turns it replaced stay inside the compression.
+    expect(order).toHaveLength(4)
+    expect(order[0]).toContain('fourth question')
+    expect(order[1]).toContain('third question')
+    expect(order[2]).toBe('compaction')
+    expect(order[3]).toContain('second question')
+    // The recorded replacement is the only compaction marker in the list.
+    expect(document.querySelectorAll('.compression-event')).toHaveLength(0)
+    expect(document.querySelector('.summary-entry')?.textContent).toContain('压缩摘要 · 第 1 轮')
+    expect(document.querySelector('.summary-entry')?.textContent).toContain('2 条消息 → 1 条摘要')
+  })
+
   it('stands a committed summary in for the turns it replaced, with the archived copy inside', () => {
     // The surface keeps the newest turn and the anchors; turn 1 is gone from it,
     // exactly as a committed replacement leaves it.
@@ -193,6 +238,8 @@ describe('TrajectoryCard', () => {
         before: replaced,
         beforeCount: 4,
         omittedBeforeCount: 0,
+        beforeFirstTurn: 1,
+        beforeLastTurn: 1,
       },
     })} t={t} />)
     expect(screen.getByText('摘要 + 第 2 轮')).toBeTruthy()
