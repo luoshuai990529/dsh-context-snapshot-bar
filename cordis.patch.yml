@@ -1,0 +1,10 @@
+# The dsh-context-snapshot-bar bundle layer: one Host plugin row.
+#
+# The row's package name resolves through the profile's own node_modules, so
+# the bundle works from a registry install, a tarball, or a linked checkout.
+# The browser half is not a row: `dsh.client` in package.json puts the Client
+# bundle in the web boot graph, which the host serves under /plugins.
+
+- insert:
+    - id: context-snapshot-bar
+      name: dsh-context-snapshot-bar

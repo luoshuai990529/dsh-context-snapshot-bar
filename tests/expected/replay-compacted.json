@@ -1,0 +1,154 @@
+{
+  "schemaVersion": 1,
+  "revision": 6,
+  "snapshot": {
+    "status": "none",
+    "seq": null,
+    "time": null,
+    "sections": [],
+    "totalSections": 0,
+    "omittedSections": 0
+  },
+  "nodes": [
+    {
+      "seq": 0,
+      "kind": "system",
+      "turn": 1,
+      "step": 1,
+      "title": "system prompt",
+      "excerpt": "you are a coding agent",
+      "truncated": false,
+      "sourceName": "@deepseek-ai/dsh-system-prompt",
+      "toolCalls": [],
+      "resultFor": null
+    },
+    {
+      "seq": 12,
+      "kind": "summary",
+      "turn": 2,
+      "step": 1,
+      "title": "compact",
+      "excerpt": "the first exchange, summarized",
+      "truncated": false,
+      "sourceName": "compact",
+      "toolCalls": [],
+      "resultFor": null
+    },
+    {
+      "seq": 8,
+      "kind": "user",
+      "turn": 2,
+      "step": 1,
+      "title": "user message",
+      "excerpt": "second question",
+      "truncated": false,
+      "sourceName": null,
+      "toolCalls": [],
+      "resultFor": null
+    },
+    {
+      "seq": 9,
+      "kind": "assistant",
+      "turn": 2,
+      "step": 1,
+      "title": "assistant message",
+      "excerpt": "second answer",
+      "truncated": false,
+      "sourceName": null,
+      "toolCalls": [],
+      "resultFor": null
+    }
+  ],
+  "totalMessages": 4,
+  "omittedMessages": 0,
+  "latestCompression": {
+    "replacementSeq": 12,
+    "generatedExcerpt": "the first exchange, summarized",
+    "checkpoint": {
+      "seq": 12,
+      "kind": "summary",
+      "turn": 2,
+      "step": 1,
+      "title": "compact",
+      "excerpt": "the first exchange, summarized",
+      "truncated": false,
+      "sourceName": "compact",
+      "toolCalls": [],
+      "resultFor": null
+    },
+    "before": [
+      {
+        "seq": 3,
+        "kind": "user",
+        "turn": 1,
+        "step": 1,
+        "title": "user message",
+        "excerpt": "first question",
+        "truncated": false,
+        "sourceName": null,
+        "toolCalls": [],
+        "resultFor": null
+      },
+      {
+        "seq": 4,
+        "kind": "assistant",
+        "turn": 1,
+        "step": 1,
+        "title": "assistant message",
+        "excerpt": "first answer",
+        "truncated": false,
+        "sourceName": null,
+        "toolCalls": [],
+        "resultFor": null
+      }
+    ],
+    "beforeCount": 2,
+    "omittedBeforeCount": 0
+  },
+  "attempt": "completed",
+  "latestChange": {
+    "kind": "replace",
+    "seq": 12,
+    "before": [
+      {
+        "seq": 3,
+        "kind": "user",
+        "turn": 1,
+        "step": 1,
+        "title": "user message",
+        "excerpt": "first question",
+        "truncated": false,
+        "sourceName": null,
+        "toolCalls": [],
+        "resultFor": null
+      },
+      {
+        "seq": 4,
+        "kind": "assistant",
+        "turn": 1,
+        "step": 1,
+        "title": "assistant message",
+        "excerpt": "first answer",
+        "truncated": false,
+        "sourceName": null,
+        "toolCalls": [],
+        "resultFor": null
+      }
+    ],
+    "after": [
+      {
+        "seq": 12,
+        "kind": "summary",
+        "turn": 2,
+        "step": 1,
+        "title": "compact",
+        "excerpt": "the first exchange, summarized",
+        "truncated": false,
+        "sourceName": "compact",
+        "toolCalls": [],
+        "resultFor": null
+      }
+    ],
+    "omittedBeforeCount": 0
+  }
+}

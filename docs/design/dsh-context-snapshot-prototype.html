@@ -1,0 +1,545 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>DSH 上下文状态栏 · 交互原型</title>
+  <style>
+    :root {
+      --bg: oklch(0.982 0.003 250);
+      --surface: oklch(1 0 0);
+      --surface-soft: oklch(0.973 0.004 250);
+      --fg: oklch(0.255 0.012 260);
+      --muted: oklch(0.62 0.012 255);
+      --faint: oklch(0.76 0.009 255);
+      --border: oklch(0.89 0.007 255);
+      --accent: oklch(0.61 0.17 256);
+      --accent-soft: oklch(0.95 0.035 256);
+      --warn: oklch(0.61 0.12 78);
+      --danger: oklch(0.59 0.16 28);
+      --font-display: "SF Pro Display", "PingFang SC", "Noto Sans CJK SC", sans-serif;
+      --font-body: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+      --font-mono: "SFMono-Regular", "Cascadia Code", "Noto Sans Mono CJK SC", monospace;
+      --shadow: 0 12px 28px oklch(0.3 0.02 255 / 0.06), 0 2px 5px oklch(0.3 0.02 255 / 0.035);
+    }
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; }
+    body { margin: 0; color: var(--fg); background: var(--bg); font-family: var(--font-body); font-size: 15px; line-height: 1.7; }
+    button, select, textarea { font: inherit; }
+    button, select { color: inherit; }
+    button { cursor: pointer; }
+    button:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid oklch(0.61 0.17 256 / 0.34); outline-offset: 2px; }
+    .app { min-height: 100vh; display: grid; grid-template-columns: 244px minmax(0, 1fr); }
+    .sidebar { border-right: 1px solid var(--border); padding: 24px 14px 18px; display: flex; flex-direction: column; background: var(--surface-soft); }
+    .brand { display: flex; gap: 10px; align-items: center; padding: 4px 7px 25px; }
+    .brand-mark { width: 28px; height: 28px; color: var(--fg); }
+    .brand-title { font: 600 16px/1.2 var(--font-display); letter-spacing: 0; }
+    .version { display: block; margin-top: 3px; color: var(--surface); background: var(--fg); width: max-content; padding: 1px 5px; border-radius: 3px; font: 600 9px/1.2 var(--font-mono); letter-spacing: .04em; }
+    .new-chat { min-height: 46px; width: 100%; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); font-weight: 550; letter-spacing: .02em; }
+    .new-chat:hover { background: var(--surface-soft); border-color: var(--faint); }
+    .nav-label { display: block; color: var(--muted); font-size: 13px; letter-spacing: .02em; margin: 23px 7px 10px; }
+    .folder { display: flex; align-items: center; gap: 8px; min-height: 35px; padding: 0 7px; border-radius: 7px; color: var(--fg); }
+    .folder.active { color: var(--fg); background: oklch(0.93 0.006 255); }
+    .folder-icon, .line-icon { width: 19px; height: 19px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+    .thread { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 2px 0; padding: 8px 10px 8px 36px; border-radius: 7px; color: var(--muted); font-size: 14px; }
+    .thread.current { background: oklch(0.93 0.006 255); color: var(--fg); font-weight: 550; }
+    .settings { margin-top: auto; border: 0; background: transparent; padding: 9px 7px; text-align: left; color: var(--muted); }
+    .settings:hover { color: var(--fg); }
+    .main { min-width: 0; display: grid; grid-template-rows: 70px minmax(0, 1fr); background: var(--surface); }
+    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 0 30px 0 36px; border-bottom: 1px solid var(--border); }
+    .conversation-title { margin: 0; font: 600 18px/1.35 var(--font-display); letter-spacing: 0; }
+    .top-actions { display: flex; align-items: center; gap: 12px; color: var(--muted); }
+    .mode-label { font-size: 13px; }
+    .quiet-icon { height: 36px; width: 36px; display: grid; place-items: center; border: 0; border-radius: 9px; background: transparent; color: var(--muted); }
+    .quiet-icon:hover { background: var(--surface-soft); color: var(--fg); }
+    .conversation { min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 270px; }
+    .chat { min-width: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; }
+    .messages { overflow: auto; padding: 45px clamp(28px, 7vw, 130px) 28px; }
+    .message { max-width: 760px; margin: 0 auto 33px; }
+    .user-message { display: flex; justify-content: flex-end; }
+    .user-bubble { max-width: 500px; padding: 12px 16px; border-radius: 15px 15px 4px 15px; background: var(--surface-soft); border: 1px solid var(--border); }
+    .assistant-message h2 { margin: 0 0 14px; font: 600 26px/1.38 var(--font-display); letter-spacing: 0; }
+    .assistant-message p { max-width: 65ch; margin: 0 0 12px; }
+    .assistant-message code { font-family: var(--font-mono); font-size: .9em; color: oklch(0.42 0.04 256); background: var(--surface-soft); border: 1px solid var(--border); padding: 1px 4px; border-radius: 4px; overflow-wrap: anywhere; }
+    .message-meta { display: flex; gap: 14px; align-items: center; color: var(--muted); margin-top: 18px; font-size: 13px; }
+    .message-meta button { padding: 3px; background: none; border: 0; color: var(--muted); }
+    .message-meta button:hover { color: var(--fg); }
+    .composer-area { padding: 0 clamp(22px, 5vw, 84px) 26px; }
+    .dock-wrap { max-width: 900px; margin: 0 auto; }
+    .snapshot-card { border: 1px solid var(--border); background: var(--surface); border-radius: 12px; overflow: hidden; box-shadow: 0 2px 7px oklch(0.26 0.02 255 / .035); }
+    .snapshot-toggle { width: 100%; min-height: 52px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 0 14px; border: 0; background: var(--surface); text-align: left; }
+    .snapshot-toggle:hover { background: var(--surface-soft); }
+    .snapshot-toggle[aria-expanded="true"] { border-bottom: 1px solid var(--border); }
+    .snapshot-icon { display: grid; place-items: center; width: 27px; height: 27px; border-radius: 7px; background: var(--accent-soft); color: var(--accent); }
+    .snapshot-main { display: flex; min-width: 0; gap: 10px; align-items: center; overflow: hidden; }
+    .snapshot-title { white-space: nowrap; font-weight: 550; letter-spacing: .02em; }
+    .snapshot-summary { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 13px; }
+    .snapshot-state { font-size: 12px; color: var(--muted); white-space: nowrap; }
+    .snapshot-state.cleared { color: var(--danger); }
+    .snapshot-state.removed { color: var(--warn); }
+    .snapshot-state.disconnected { color: var(--warn); }
+    .chevron { width: 17px; height: 17px; transition: transform .18s ease; }
+    .snapshot-toggle[aria-expanded="true"] .chevron { transform: rotate(180deg); }
+    .snapshot-detail { display: none; padding: 15px 16px 16px; max-height: 328px; overflow: auto; }
+    .snapshot-detail.open { display: block; }
+    .snapshot-note { margin: 0 0 13px; color: var(--muted); font-size: 12px; line-height: 1.55; }
+    .meta-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin: 0 0 13px; font: 12px/1.5 var(--font-mono); color: var(--muted); }
+    .meta-row span { overflow-wrap: anywhere; }
+    .copy-row { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 0 0 13px; }
+    .source { min-width: 0; color: var(--muted); font: 12px/1.45 var(--font-mono); overflow-wrap: anywhere; }
+    .copy-button { flex: none; min-height: 32px; padding: 0 10px; border: 1px solid var(--border); border-radius: 7px; color: var(--fg); background: var(--surface); font-size: 12px; letter-spacing: .02em; }
+    .copy-button:hover { background: var(--surface-soft); border-color: var(--faint); }
+    .section-list { display: grid; gap: 10px; }
+    .section { border-top: 1px solid var(--border); padding-top: 10px; }
+    .section-head { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+    .section-label { font-size: 13px; font-weight: 550; letter-spacing: .02em; }
+    .section-name { color: var(--muted); font: 11px/1.5 var(--font-mono); overflow-wrap: anywhere; text-align: right; }
+    .source-text { margin: 7px 0 0; padding: 10px 11px; background: var(--surface-soft); border-radius: 7px; color: oklch(0.37 0.014 255); font: 12px/1.58 var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+    .state-change { animation: state-flash 1.1s ease-out; }
+    @keyframes state-flash { from { background: var(--accent-soft); } to { background: transparent; } }
+    .composer { margin-top: 10px; border: 1px solid var(--border); background: var(--surface); border-radius: 18px; box-shadow: var(--shadow); padding: 13px 13px 9px; }
+    .composer textarea { display: block; width: 100%; min-height: 47px; border: 0; resize: none; background: transparent; color: var(--fg); outline: 0; line-height: 1.55; }
+    .composer textarea::placeholder { color: var(--faint); }
+    .composer-bottom { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .scope { display: flex; align-items: center; gap: 7px; min-width: 0; font-size: 13px; color: var(--muted); }
+    .scope span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .send { width: 37px; height: 37px; border: 0; border-radius: 50%; display: grid; place-items: center; color: var(--surface); background: var(--accent); }
+    .send:hover { background: oklch(0.53 0.17 256); transform: translateY(-1px); }
+    .send:active { transform: translateY(1px); }
+    .demo-panel { border-left: 1px solid var(--border); background: var(--surface-soft); padding: 28px 20px; }
+    .demo-eyebrow { margin: 0 0 9px; font-size: 11px; color: var(--muted); font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+    .demo-panel h3 { margin: 0; font: 600 17px/1.4 var(--font-display); letter-spacing: 0; }
+    .demo-panel p { margin: 7px 0 18px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+    .demo-control { display: grid; gap: 7px; }
+    .demo-control label { color: var(--fg); font-size: 13px; font-weight: 550; letter-spacing: .02em; }
+    select { min-height: 39px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); padding: 0 8px; font-size: 13px; }
+    select:hover { border-color: var(--faint); }
+    .demo-divider { height: 1px; background: var(--border); margin: 25px 0 17px; }
+    .demo-list { margin: 0; padding: 0; list-style: none; color: var(--muted); font-size: 12px; line-height: 1.65; }
+    .demo-list li { position: relative; padding-left: 12px; margin-bottom: 8px; }
+    .demo-list li::before { content: ""; position: absolute; top: .66em; left: 0; width: 4px; height: 4px; border-radius: 50%; background: var(--faint); }
+    .mobile-demo { display: none; }
+    @media (max-width: 1180px) { .conversation { grid-template-columns: minmax(0, 1fr) 230px; } .demo-panel { padding: 25px 16px; } .messages { padding-left: 48px; padding-right: 48px; } }
+    @media (max-width: 1024px) { .app { grid-template-columns: 206px minmax(0, 1fr); } .conversation { display: block; } .demo-panel { display: none; } .mobile-demo { display: block; padding: 12px clamp(22px, 5vw, 84px) 0; border-bottom: 1px solid var(--border); } .mobile-demo-inner { max-width: 900px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--muted); font-size: 12px; } .mobile-demo select { min-height: 34px; max-width: 210px; } }
+    @media (max-width: 720px) { .app { display: block; } .sidebar { display: none; } .main { min-height: 100vh; grid-template-rows: 58px minmax(0, 1fr); } .topbar { padding: 0 15px; } .conversation-title { font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .mode-label { display: none; } .top-actions { gap: 2px; } .messages { padding: 28px 18px 18px; } .assistant-message h2 { font-size: 22px; } .message { margin-bottom: 26px; } .composer-area { padding: 0 12px 16px; } .mobile-demo { padding: 9px 12px 0; } .mobile-demo-inner { align-items: flex-start; } .mobile-demo .demo-label { padding-top: 7px; } .mobile-demo select { max-width: 185px; } .snapshot-main { gap: 7px; } .snapshot-summary { display: none; } .snapshot-detail { max-height: 295px; } .section-head { align-items: flex-start; flex-direction: column; gap: 1px; } .section-name { text-align: left; } .copy-row { align-items: flex-start; flex-direction: column; gap: 7px; } }
+    @media (prefers-color-scheme: dark) { :root { --bg: oklch(0.16 0.012 255); --surface: oklch(0.19 0.012 255); --surface-soft: oklch(0.22 0.012 255); --fg: oklch(0.92 0.008 255); --muted: oklch(0.7 0.012 255); --faint: oklch(0.52 0.012 255); --border: oklch(0.31 0.012 255); --accent-soft: oklch(0.26 0.055 256); --shadow: 0 12px 28px oklch(0.06 0.012 255 / .34); } .folder.active, .thread.current { background: oklch(0.27 0.012 255); } .source-text { color: oklch(0.82 0.012 255); } .assistant-message code { color: oklch(0.76 0.1 256); } }
+  
+    /* Keep the composer visible while the transcript and snapshot details scroll independently. */
+    html, body { height: 100%; overflow: hidden; }
+    .app { height: 100dvh; min-height: 0; overflow: hidden; }
+    .main, .chat, .messages { min-height: 0; }
+    .main, .chat { height: 100%; }
+    .snapshot-detail { max-height: min(328px, 40dvh); }
+    .demo-panel { min-height: 0; overflow: auto; }
+    .snapshot-main, .snapshot-state { min-width: 0; }
+    .snapshot-state { max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+    @media (max-width: 1024px) {
+      .conversation { display: grid; grid-template-columns: minmax(0, 1fr); }
+      .chat { grid-template-rows: auto minmax(0, 1fr) auto; }
+      .mobile-demo { padding-bottom: 10px; }
+    }
+    @media (max-width: 720px) {
+      .main { min-height: 0; }
+      .snapshot-toggle { gap: 7px; padding: 0 10px; }
+      .snapshot-title { font-size: 13px; letter-spacing: 0; }
+      .snapshot-main { flex-direction: column; align-items: flex-start; gap: 0; }
+      .snapshot-summary { display: block; max-width: 100%; font-size: 11px; }
+      .snapshot-state { max-width: 112px; font-size: 11px; }
+      .snapshot-detail { max-height: min(295px, 34dvh); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .state-change { animation: none; }
+      .chevron { transition: none; }
+    }
+    /* Current model-visible context: a bounded dock module above the snapshot. */
+    .dock-wrap { max-height: min(556px, 68dvh); display: flex; flex-direction: column; min-height: 0; padding: 1px 1px 0; }
+    .trajectory-card, .snapshot-card { display: flex; flex-direction: column; min-height: 54px; flex: 0 1 auto; }
+    .trajectory-toggle, .snapshot-toggle { flex: none; }
+    .trajectory-detail, .snapshot-detail { min-height: 0; flex: 0 1 auto; }
+    .composer { position: relative; flex: none; }
+    .trajectory-card { margin-bottom: 9px; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--surface); box-shadow: 0 2px 7px oklch(0.26 0.02 255 / .035); }
+    .trajectory-toggle { width: 100%; min-height: 54px; display: grid; grid-template-columns: 28px minmax(0, 1fr) auto 17px; align-items: center; gap: 10px; padding: 0 14px; border: 0; background: var(--surface); color: var(--fg); text-align: left; }
+    .trajectory-toggle:hover { background: var(--surface-soft); }
+    .trajectory-toggle[aria-expanded="true"] { border-bottom: 1px solid var(--border); }
+    .trajectory-glyph { display: grid; place-items: center; width: 27px; height: 27px; border-radius: 7px; color: var(--fg); background: var(--surface-soft); font: 600 16px/1 var(--font-mono); }
+    .trajectory-label { display: flex; gap: 9px; align-items: center; min-width: 0; }
+    .trajectory-title { white-space: nowrap; font-weight: 550; letter-spacing: .02em; }
+    .trajectory-strip { display: flex; gap: 4px; min-width: 0; overflow: hidden; }
+    .strip-token { flex: none; border: 1px solid var(--border); border-radius: 999px; padding: 1px 6px; color: var(--muted); background: var(--surface); font-size: 10px; line-height: 1.5; letter-spacing: .01em; }
+    .trajectory-state { color: var(--muted); white-space: nowrap; font-size: 12px; }
+    .trajectory-toggle .chevron { transition: transform .18s cubic-bezier(.2,0,0,1); }
+    .trajectory-toggle[aria-expanded="true"] .chevron { transform: rotate(180deg); }
+    .trajectory-detail { display: none; padding: 13px 14px 14px; max-height: min(342px, 39dvh); overflow: auto; }
+    .trajectory-detail.open { display: block; }
+    .trajectory-intro { display: flex; flex-direction: column; justify-content: space-between; gap: 5px; align-items: flex-start; margin: 0 0 11px; }
+    .trajectory-intro p { max-width: 64ch; margin: 0; color: var(--muted); font-size: 12px; line-height: 1.55; }
+    .context-status { flex: none; max-width: 100%; white-space: normal; border-radius: 999px; padding: 2px 7px; color: var(--muted); background: var(--surface-soft); font: 11px/1.55 var(--font-mono); white-space: normal; }
+    .context-status.committing { color: var(--fg); background: var(--accent-soft); }
+    .context-status.error { color: var(--danger); background: oklch(0.96 0.025 28); }
+    .context-track { display: grid; gap: 9px; min-width: 0; }
+    .track-caption { display: flex; justify-content: space-between; gap: 12px; color: var(--muted); font-size: 11px; letter-spacing: .02em; }
+    .turn-segment { display: grid; gap: 7px; min-width: 0; }
+    .turn-label { display: flex; align-items: center; gap: 7px; color: var(--muted); font: 11px/1.4 var(--font-mono); }
+    .turn-label::after { content: ""; height: 1px; min-width: 12px; flex: 1; background: var(--border); }
+    .context-node { position: relative; width: 100%; display: grid; grid-template-columns: 58px minmax(0, 1fr) auto; align-items: start; gap: 9px; border: 1px solid var(--border); border-radius: 9px; padding: 9px 10px; background: var(--surface); color: var(--fg); text-align: left; transition: background .18s cubic-bezier(.2,0,0,1), border-color .18s cubic-bezier(.2,0,0,1), transform .42s cubic-bezier(.2,0,0,1), opacity .42s cubic-bezier(.2,0,0,1); }
+    .context-node:hover { background: var(--surface-soft); border-color: var(--faint); }
+    .context-node.selected { border-color: var(--accent); box-shadow: 0 0 0 2px oklch(0.61 0.17 256 / .13); }
+    .context-node.system { color: var(--muted); background: var(--surface-soft); border-style: dashed; }
+    .context-node.injected { background: oklch(0.975 0.009 256); }
+    .context-node.human { background: oklch(0.985 0.004 70); }
+    .context-node.summary { border-color: oklch(0.67 0.08 152); background: oklch(0.97 0.018 152); }
+    .context-node.checkpoint { background: oklch(0.97 0.018 152); }
+    .tool-result.pruned { background: oklch(0.976 0.022 78); }
+    .context-node.entering { animation: node-enter .42s cubic-bezier(.2,0,0,1) both; }
+    .context-node.contracting { opacity: 0; transform: scale(.975); pointer-events: none; }
+    .node-kind { color: var(--muted); font: 11px/1.42 var(--font-mono); }
+    .node-body { min-width: 0; }
+    .node-title { display: block; font-size: 12px; font-weight: 550; letter-spacing: .01em; }
+    .node-excerpt { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; line-height: 1.45; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .node-meta { color: var(--muted); font: 10px/1.5 var(--font-mono); white-space: nowrap; }
+    .tool-pairs { grid-column: 2 / -1; display: grid; gap: 5px; margin-top: 1px; }
+    .tool-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 5px; }
+    .tool-call, .tool-result { min-width: 0; border-radius: 6px; padding: 5px 7px; font: 10px/1.45 var(--font-mono); overflow-wrap: anywhere; }
+    .tool-call { border: 1px solid var(--border); color: var(--fg); background: var(--surface-soft); }
+    .tool-result { position: relative; border: 1px solid var(--border); color: var(--muted); background: var(--surface); }
+    .tool-result::before { content: "↳"; margin-right: 4px; color: var(--muted); }
+    .tool-chip-label { display: block; color: var(--muted); font-family: var(--font-body); font-size: 10px; letter-spacing: .02em; }
+    .inspect-panel { margin-top: 10px; border-top: 1px solid var(--border); padding-top: 10px; }
+    .inspect-head { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+    .inspect-title { font-size: 12px; font-weight: 550; letter-spacing: .02em; }
+    .inspect-meta { color: var(--muted); font: 10px/1.5 var(--font-mono); text-align: right; }
+    .inspect-copy { margin: 5px 0 0; color: var(--muted); font-size: 12px; line-height: 1.55; }
+    .summary-points { margin: 6px 0 0; padding: 0 0 0 17px; color: var(--muted); font-size: 12px; line-height: 1.55; }
+    .summary-points li { margin: 2px 0; }
+    .archive-panel { margin-top: 10px; border-top: 1px solid var(--border); padding-top: 9px; color: var(--muted); font-size: 11px; line-height: 1.52; }
+    .archive-panel summary { cursor: pointer; color: var(--muted); letter-spacing: .01em; }
+    .archive-panel summary:hover { color: var(--fg); }
+    .archive-panel p { margin: 8px 0 0; }
+    .archive-nodes { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+    .archive-nodes span { border: 1px dashed var(--border); border-radius: 5px; padding: 2px 5px; opacity: .66; }
+    .archive-nodes .archive-arrow { border: 0; padding: 0; opacity: 1; }
+    .archive-nodes .archive-summary { border-style: solid; color: var(--fg); opacity: 1; background: oklch(0.97 0.018 152); }
+    .replay-note { margin: 10px 0 0; color: var(--muted); font-size: 11px; line-height: 1.52; }
+    .demo-motion { display: grid; gap: 8px; margin-top: 18px; }
+    .demo-button-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .demo-button { min-height: 34px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); color: var(--fg); font-size: 12px; letter-spacing: .01em; }
+    .demo-button:hover { background: var(--surface-soft); border-color: var(--faint); }
+    .demo-button.primary { border-color: var(--accent); background: var(--accent); color: var(--surface); }
+    .demo-button.primary:hover { background: oklch(0.53 0.17 256); }
+    .demo-playback { color: var(--muted); font-size: 11px; }
+    @keyframes node-enter { from { opacity: 0; transform: translateY(9px); } to { opacity: 1; transform: translateY(0); } }
+    @media (max-width: 720px) {
+      .dock-wrap { max-height: min(596px, 66dvh); }
+      .trajectory-toggle { grid-template-columns: 25px minmax(0, 1fr) auto 15px; gap: 7px; padding: 0 10px; }
+      .trajectory-label { display: grid; gap: 1px; }
+      .trajectory-title { font-size: 13px; }
+      .trajectory-strip { max-width: 188px; }
+      .strip-token { padding: 0 5px; font-size: 9px; }
+      .trajectory-state { max-width: 66px; overflow: hidden; text-overflow: ellipsis; font-size: 11px; }
+      .trajectory-detail { max-height: min(320px, 37dvh); padding: 11px 10px 12px; }
+      .trajectory-intro { display: block; }
+      .context-status { display: inline-block; margin-top: 5px; }
+      .context-node { grid-template-columns: 51px minmax(0, 1fr); gap: 7px; padding: 8px; }
+      .node-meta { display: none; }
+      .tool-pairs { grid-column: 2; }
+      .tool-pair { grid-template-columns: 1fr; }
+      .inspect-meta { max-width: 46%; }
+    }
+    .mobile-demo-controls { display: flex; align-items: center; gap: 6px; min-width: 0; }
+    .mobile-demo-controls select { min-width: 0; max-width: 156px; }
+    .mobile-demo-controls .demo-button { min-width: 54px; }
+    @media (max-width: 720px) { .mobile-demo-inner { flex-wrap: wrap; } .mobile-demo-controls { width: 100%; } .mobile-demo-controls select { flex: 1 1 0; max-width: none; } }
+    @media (prefers-reduced-motion: reduce) {
+      .context-node, .trajectory-toggle .chevron { transition: none; }
+      .context-node.entering { animation: none; }
+    }
+    @media (prefers-color-scheme: dark) {
+      .context-node.injected { background: oklch(0.23 0.027 256); }
+      .context-node.human { background: oklch(0.24 0.012 75); }
+      .context-node.summary, .context-node.checkpoint, .archive-nodes .archive-summary { background: oklch(0.25 0.033 152); }
+      .tool-result.pruned { background: oklch(0.27 0.03 78); }
+      .context-status.error { background: oklch(0.25 0.034 28); }
+    }
+
+    .overview-wrap { position: sticky; top: -13px; z-index: 2; padding: 8px 0 10px; background: var(--surface); border-bottom: 1px solid var(--border); margin-bottom: 10px; }
+    .overview-caption { display: flex; justify-content: space-between; color: var(--muted); font-size: 11px; margin-bottom: 7px; }
+    .overview-flow { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+    .overview-chip { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 34px; min-height: 36px; padding: 3px 5px; border: 1px solid var(--border); border-radius: 6px; font-size: 10px; background: var(--surface-soft); color: var(--muted); }
+    .overview-chip.human { background: oklch(0.96 0.025 78); color: oklch(0.42 0.055 78); }
+    .overview-chip.injected { background: var(--accent-soft); color: var(--accent); }
+    .overview-chip.summary { background: oklch(0.95 0.035 152); color: oklch(0.42 0.09 152); border-color: oklch(0.72 0.08 152); min-width: 68px; }
+    .overview-chip small { font-size: 8px; }
+    .overview-group { display: flex; align-items: center; gap: 3px; padding: 3px; border: 1px dashed var(--border); border-radius: 8px; }
+    .overview-group.contracting { animation: group-contract .48s ease-in both; }
+    .overview-chip.entering { animation: node-enter .42s ease-out both; }
+    .overview-chip.pruned { animation: result-prune .5s ease-out both; background: oklch(0.96 0.04 78); }
+    .assistant-cluster.contracting { animation: group-contract .48s ease-in both; }
+    .context-node.contracting { animation: group-contract .48s ease-in both; }
+    @keyframes group-contract { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(.65); } }
+    @keyframes result-prune { 0% { transform: scale(1); } 45% { transform: scale(.8); } 100% { transform: scale(1); } }
+    @media (max-width: 720px) { .overview-wrap { top: -11px; } .overview-chip { min-width: 26px; padding: 2px 3px; font-size: 9px; } .overview-flow, .overview-group { gap: 2px; } .overview-group { padding: 2px; } }
+    @media (prefers-reduced-motion: reduce) { .overview-chip, .overview-group, .assistant-cluster, .context-node { animation: none !important; transition: none !important; } }
+  </style>
+</head>
+<body>
+  <div class="app" data-od-id="dsh-shell">
+    <aside class="sidebar" data-od-id="workspace-sidebar" aria-label="工作区导航">
+      <div class="brand" data-od-id="dsh-brand"><svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 7.1 7.2 4l4.8 3.3L16.8 4 21 7.1l-2.1 7.8-4.5 4.2-2.4-3.1-2.4 3.1-4.5-4.2L3 7.1Zm4.9 2.8 2 1.3 2.1-1.4 2.1 1.4 2-1.3-2-1.4L12 10 9.9 8.6l-2 1.3Z"/></svg><div><div class="brand-title">DSH 本地构建</div><span class="version">0.1.5-rc2</span></div></div>
+      <button class="new-chat" data-od-id="new-chat-button">⊕&nbsp; 新会话</button>
+      <span class="nav-label">工作区</span>
+      <div class="folder active"><svg class="folder-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6.8h6l2 2H21v9.8H3z"/></svg>deepseek-harness</div>
+      <div class="thread current">定位配置加载失败</div>
+      <div class="thread">修复命令行环境变量提示</div>
+      <div class="thread">讨论插件上下文边界</div>
+      <button class="settings" data-od-id="settings-button">⚙&nbsp; 设置</button>
+    </aside>
+    <main class="main" data-od-id="conversation-page">
+      <header class="topbar" data-od-id="conversation-header"><h1 class="conversation-title" data-od-id="conversation-title">定位配置加载失败</h1><div class="top-actions"><span class="mode-label">标准模式</span><button class="quiet-icon" data-od-id="more-menu" aria-label="更多选项">•••</button><button class="quiet-icon" data-od-id="toggle-sidebar" aria-label="切换侧边栏">▯</button></div></header>
+      <div class="conversation">
+        <section class="chat" data-od-id="chat-conversation" aria-label="对话内容">
+          <div class="mobile-demo" data-od-id="mobile-demo-control"><div class="mobile-demo-inner"><span class="demo-label">样例数据 / 演示</span><div class="mobile-demo-controls"><select id="mobileScenario" aria-label="选择快照状态"></select><select id="mobileMotionScenario" aria-label="选择轨迹演示"><option value="compact">压缩回放</option><option value="prune">裁剪结果</option><option value="failure">压缩失败</option><option value="newSnapshot">新快照</option></select><button class="demo-button primary" id="mobilePlay" type="button">播放</button></div></div></div>
+          <div class="messages" data-od-id="message-list">
+            <article class="message user-message" data-od-id="user-message"><div class="user-bubble">启动后没有读到预期的工作区配置，请定位原因并验证修复路径。</div></article>
+            <article class="message assistant-message" data-od-id="assistant-message"><h2 data-od-id="assistant-response-heading">先检查配置加载入口</h2><p>我会读取配置入口与覆盖顺序，再运行定向测试。输入框上方的两张卡分别显示当前模型可见的消息组成，以及最近已提交的运行时快照。</p><p>压缩成功会在 checkpoint 提交时替换精确来源节点；已移出的记录仍可追溯，但不再表示模型当前可见。</p><div class="message-meta"><span>本地会话</span><span>14:31</span><button aria-label="复制回复">⧉</button><button aria-label="给回复好评">♡</button></div></article>
+          </div>
+          <div class="composer-area" data-od-id="conversation-input-dock">
+            <div class="dock-wrap">
+              <section class="trajectory-card" data-od-id="conversation-context-trajectory" aria-label="对话上下文轨迹">
+                <button class="trajectory-toggle" data-od-id="trajectory-expand-toggle" id="trajectoryToggle" aria-expanded="true" aria-controls="trajectoryDetail">
+                  <span class="trajectory-glyph" aria-hidden="true">≋</span><span class="trajectory-label"><span class="trajectory-title">对话上下文轨迹</span><span class="trajectory-strip" aria-hidden="true"><span class="strip-token">系统</span><span class="strip-token">注入</span><span class="strip-token">人类</span><span class="strip-token">助手·工具</span></span></span><span class="trajectory-state" id="trajectoryState">T1–T2 · 当前</span><svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <div class="trajectory-detail open" id="trajectoryDetail" data-od-id="trajectory-details"></div>
+              </section>
+              <section class="snapshot-card" data-od-id="runtime-context-snapshot" aria-label="运行时上下文快照">
+                <button class="snapshot-toggle" data-od-id="snapshot-expand-toggle" id="snapshotToggle" aria-expanded="false" aria-controls="snapshotDetail">
+                  <span class="snapshot-icon" aria-hidden="true">⌁</span><span class="snapshot-main"><span class="snapshot-title" id="snapshotTitle">上下文快照</span><span class="snapshot-summary" id="snapshotSummary">2 项 · 更新于 14:32</span></span><span class="snapshot-state" id="snapshotState">当前上下文</span><svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <div class="snapshot-detail" id="snapshotDetail" data-od-id="snapshot-details"></div>
+              </section>
+              <form class="composer" data-od-id="chat-composer"><textarea aria-label="输入消息" placeholder="发消息或创建任务，调用指令、@ 文件或对话"></textarea><div class="composer-bottom"><div class="scope"><span aria-hidden="true">⌘</span><span>工作区内修改</span></div><button class="send" data-od-id="send-message" aria-label="发送消息" type="submit">↑</button></div></form>
+            </div>
+          </div>
+        </section>
+        <aside class="demo-panel" data-od-id="demo-controls" aria-label="原型演示控制"><div class="demo-eyebrow">Prototype only</div><h3>演示状态</h3><p>样例数据，仅用于观察组件在已提交事件后的状态变化。</p><div class="demo-control"><label for="scenario">选择快照记录</label><select id="scenario"><option value="latest">最新快照</option><option value="none">尚无记录</option><option value="cleared">已清除</option><option value="removed">已移出当前上下文</option><option value="disconnected">已断开连接</option><option value="arriving">新快照已提交</option></select></div><div class="demo-motion" data-od-id="trajectory-demo-controls"><label for="motionScenario">上下文轨迹回放</label><select id="motionScenario"><option value="compact">压缩成功</option><option value="prune">工具结果裁剪</option><option value="failure">压缩失败</option><option value="newSnapshot">新快照已提交</option></select><div class="demo-button-row"><button class="demo-button primary" id="demoPlay" type="button">播放</button><button class="demo-button" id="demoPause" type="button">暂停</button><button class="demo-button" id="demoReplay" type="button">重播</button></div><span class="demo-playback" id="demoPlayback" aria-live="polite">等待手动播放</span></div><div class="demo-divider"></div><ul class="demo-list"><li>仅属于当前选中会话</li><li>“实时”指已提交事件送达</li><li>不展示模型、令牌、任务或计划指标</li></ul></aside>
+      </div>
+    </main>
+  </div>
+  <script>
+    const snapshots = {
+      latest: { kind: 'latest', title: '上下文快照', summary: '2 项 · 更新于 14:32', state: '当前上下文', time: '2026-09-11 14:32:18', seq: 'event #148', note: '已在模型步骤准备时提交；仅在有效快照变化或原快照已离开模型可见面时追加。', sections: [
+        ['沙箱文件范围', 'sandbox:policy', 'Current DSH file policy: workspace-write. Any available operation enforced by the DSH file sandbox may modify files under the session workspace: "/workspace/demo". Some platform temporary areas may also be writable.'],
+        ['操作审批说明', 'approval:policy', 'Approval policy: ask. Operations that require approval may ask through the configured answerers; without an available answerer, the request fails closed.']
+      ] },
+      none: { kind: 'none', title: '尚无上下文快照', summary: '当前会话还没有已提交的记录', state: '无记录', time: '', seq: '', note: '这不表示插件被禁用；只是当前会话尚未写入运行时上下文快照。', sections: [] },
+      cleared: { kind: 'cleared', title: '上下文快照已清除', summary: '14:37 提交 · 当前没有适用内容', state: '已清除', time: '2026-09-11 14:37:04', seq: 'event #152', note: '清除事件不会保留旧的当前值。以下是这次提交的原始文本。', raw: 'Current runtime context: none. Earlier runtime-context snapshots no longer apply.', sections: [] },
+      removed: { kind: 'removed', title: '上下文快照', summary: '最近记录 · 14:32', state: '已移出当前上下文', time: '2026-09-11 14:32:18', seq: 'event #148', note: '此记录被压缩或替换后已不在模型当前可见上下文中；保留它只用于追溯最近已提交内容。', sections: [
+        ['沙箱文件范围', 'sandbox:policy', 'Current DSH file policy: workspace-write. Any available operation enforced by the DSH file sandbox may modify files under the session workspace: "/workspace/demo". Some platform temporary areas may also be writable.'],
+        ['操作审批说明', 'approval:policy', 'Approval policy: ask. Operations that require approval may ask through the configured answerers; without an available answerer, the request fails closed.']
+      ] },
+      disconnected: { kind: 'disconnected', title: '上下文快照', summary: '最后已知记录 · 14:32', state: '连接已断开', time: '2026-09-11 14:32:18', seq: 'event #148', note: '连接中断；保留最后已知的已提交记录，未伪造新的更新时间。', sections: [
+        ['沙箱文件范围', 'sandbox:policy', 'Current DSH file policy: workspace-write. Any available operation enforced by the DSH file sandbox may modify files under the session workspace: "/workspace/demo". Some platform temporary areas may also be writable.'],
+        ['操作审批说明', 'approval:policy', 'Approval policy: ask. Operations that require approval may ask through the configured answerers; without an available answerer, the request fails closed.']
+      ] },
+      arriving: { kind: 'arriving', title: '上下文快照', summary: '4 项 · 刚刚提交', state: '当前上下文', time: '2026-09-11 14:40:01', seq: 'event #168', note: '新快照已在提交事件后送达。新增段落以自然顺序呈现；第三方名称不需要预先注册。', sections: [
+        ['沙箱文件范围', 'sandbox:policy', 'Current DSH file policy: workspace-write. Any available operation enforced by the DSH file sandbox may modify files under the session workspace: "/workspace/demo". Some platform temporary areas may also be writable.'],
+        ['操作审批说明', 'approval:policy', 'Approval policy: ask. Operations that require approval may ask through the configured answerers; without an available answerer, the request fails closed.'],
+        ['子代理委派边界', 'subagent:delegation', 'You are a delegated subagent: your permission scope was fixed when you were started and cannot be widened from inside this session — operations that require approval are rejected automatically. When the task needs access beyond that scope, do not retry the denied operation; state the limitation in your reply so the delegating agent can handle it.'],
+        ['第三方上下文', 'acme:review-scope', 'Repository review scope: focus on files changed by the selected session. This third-party section is rendered as-is because section names and text are extensible.']
+      ] }
+    };
+    const labels = { 'sandbox:policy': '沙箱文件范围', 'approval:policy': '操作审批说明', 'subagent:delegation': '子代理委派边界' };
+    let current = 'latest';
+    const toggle = document.getElementById('snapshotToggle');
+    const detail = document.getElementById('snapshotDetail');
+    const title = document.getElementById('snapshotTitle');
+    const summary = document.getElementById('snapshotSummary');
+    const state = document.getElementById('snapshotState');
+    const select = document.getElementById('scenario');
+    const mobileSelect = document.getElementById('mobileScenario');
+    function rawSnapshot(s) { if (s.raw) return s.raw; return 'Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\n' + s.sections.map(([, , text]) => text).join('\n\n'); }
+    function escapeHTML(text) { return text.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c])); }
+    function detailHTML(s) {
+      if (s.kind === 'none') return `<p class="snapshot-note">${s.note}</p>`;
+      const meta = `<div class="meta-row"><span>${s.time}</span><span>${s.seq}</span><span>source.kind=plugin</span></div>`;
+      const copy = `<div class="copy-row"><span class="source">@deepseek-ai/dsh-system-prompt</span><button class="copy-button" type="button" data-od-id="copy-raw-snapshot" id="copySnapshot">复制完整原文</button></div>`;
+      const raw = s.raw ? `<div class="section"><div class="section-head"><span class="section-label">清除记录</span><span class="section-name">runtime-context</span></div><pre class="source-text">${escapeHTML(s.raw)}</pre></div>` : s.sections.map(([label, name, text]) => `<div class="section"><div class="section-head"><span class="section-label">${escapeHTML(labels[name] || label)}</span><span class="section-name">${escapeHTML(name)}</span></div><pre class="source-text">${escapeHTML(text)}</pre></div>`).join('');
+      return `<p class="snapshot-note">${s.note}</p>${meta}${copy}<div class="section-list">${raw}</div>`;
+    }
+    function render(key, flash = false) {
+      current = key; const s = snapshots[key];
+      title.textContent = s.title; summary.textContent = s.summary; state.textContent = s.state;
+      state.className = `snapshot-state ${s.kind}`;
+      detail.innerHTML = detailHTML(s);
+      if (flash) { detail.classList.remove('state-change'); void detail.offsetWidth; detail.classList.add('state-change'); }
+      const copy = document.getElementById('copySnapshot');
+      if (copy) copy.addEventListener('click', async () => { const value = rawSnapshot(s); try { await navigator.clipboard.writeText(value); } catch (_) { const area = document.createElement('textarea'); area.value = value; document.body.append(area); area.select(); document.execCommand('copy'); area.remove(); } copy.textContent = '已复制'; setTimeout(() => copy.textContent = '复制完整原文', 1600); });
+    }
+    Object.entries(snapshots).forEach(([key, s]) => { const option = new Option(select.querySelector(`option[value="${key}"]`).textContent, key); mobileSelect.add(option); });
+    toggle.addEventListener('click', () => { const open = toggle.getAttribute('aria-expanded') === 'true'; toggle.setAttribute('aria-expanded', String(!open)); detail.classList.toggle('open', !open); });
+    [select, mobileSelect].forEach(input => input.addEventListener('change', event => { const key = event.target.value; select.value = key; mobileSelect.value = key; render(key, key === 'arriving'); }));
+    document.querySelector('.composer').addEventListener('submit', e => e.preventDefault());
+    render('latest');
+  </script>
+  <script>
+    (() => {
+      const trajectoryToggle = document.getElementById('trajectoryToggle');
+      const trajectoryDetail = document.getElementById('trajectoryDetail');
+      const trajectoryState = document.getElementById('trajectoryState');
+      const motionScenario = document.getElementById('motionScenario');
+      const mobileMotionScenario = document.getElementById('mobileMotionScenario');
+      const demoPlayback = document.getElementById('demoPlayback');
+      const demoPause = document.getElementById('demoPause');
+      const demoPlay = document.getElementById('demoPlay');
+      const demoReplay = document.getElementById('demoReplay');
+      const mobilePlay = document.getElementById('mobilePlay');
+      const content = {
+        system: { kind: 'system', label: '系统', title: '会话基础指令', excerpt: '本地编码会话 · 仅作为低强调的上下文锚点', meta: 'record #021' },
+        snapshotOld: { kind: 'injected', label: '注入上下文', title: '运行时上下文快照', excerpt: 'sandbox:policy · workspace-write · 2 项', meta: 'record #148', inspector: '这条消息来自运行时插件，包含沙箱与审批规则。本次演示会将它和第 1 轮一起压缩。' },
+        humanT1: { kind: 'human', label: '人类', title: '定位配置加载失败', excerpt: '启动后未读取预期工作区配置。', meta: 'T1 · step 03 · record #149' },
+        assistantT1: { kind: 'assistant', label: '助手', title: '检查配置加载入口', excerpt: '读取加载路径与覆盖顺序。', meta: 'T1 · step 03 · record #150', tools: [{ id: 'readConfig', name: 'read_file', args: 'packages/core/config/load.ts', result: '工具结果 · 成功 · 找到 42 行加载逻辑', resultExcerpt: '环境变量在工作区配置合并后仍保留旧值。', resultMeta: 'tool/result · record #151' }] },
+        finalT1: { kind: 'assistant', label: '助手', title: '初步定位', excerpt: '覆盖顺序将工作区路径的值遮蔽了。', meta: 'T1 · step 04 · record #152' },
+        humanT2: { kind: 'human', label: '人类', title: '请验证修复路径', excerpt: '先确认最小修复，再运行对应测试。', meta: 'T2 · step 05 · record #153' },
+        assistantT2: { kind: 'assistant', label: '助手', title: '执行定向验证', excerpt: '运行配置加载测试。', meta: 'T2 · step 05 · record #154', tools: [{ id: 'runTest', name: 'run_command', args: 'pnpm test config -- --runInBand', result: '工具结果 · 成功 · 6 项断言通过', resultExcerpt: '配置覆盖顺序符合修复预期。', resultMeta: 'tool/result · record #155' }] },
+        finalT2: { kind: 'assistant', label: '助手', title: '验证完成', excerpt: '修复可将工作区配置重新带入加载链。', meta: 'T2 · step 06 · record #156' },
+        summary: { kind: 'summary', label: '压缩摘要', title: '配置加载诊断摘要', excerpt: 'user/message · 替换 T1 的完整消息组与旧注入快照。', meta: 'checkpoint · record #162', bullets: ['工作区配置的值在合并顺序中被旧环境变量遮蔽。', '检查了 load.ts 的读取入口与覆盖顺序。', '定向验证应覆盖工作区路径优先级。'], range: '替换来源：#148、#149、#150、#151、#152', inspector: '这份摘要接替了第 1 轮消息与旧快照，最近一轮仍完整保留。' },
+        snapshotNew: { kind: 'injected', label: '注入上下文', title: '运行时上下文快照', excerpt: '4 项运行时规则 · 新提交', meta: 'record #168', inspector: '稍后提交的新快照重新进入当前上下文，因此快照卡恢复为“当前上下文”。' }
+      };
+      const baseOrder = ['system', 'snapshotOld', 'humanT1', 'assistantT1', 'finalT1', 'humanT2', 'assistantT2', 'finalT2'];
+      const preIds = ['snapshotOld', 'humanT1', 'assistantT1', 'finalT1'];
+      const tailIds = ['humanT2', 'assistantT2', 'finalT2'];
+      let view = { visible: new Set(baseOrder), results: new Set(['readConfig', 'runTest']), mode: 'base', status: '当前模型可见顺序', pruned: false, contracting: false, entering: new Set() };
+      let selected = 'snapshotOld';
+      let runner = { id: 0, paused: false, running: false };
+      const safe = text => String(text).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char]));
+      function nodeMarkup(id) {
+        const n = content[id];
+        if (!n || !view.visible.has(id)) return '';
+        const classes = `context-node ${n.kind} ${selected === id ? 'selected' : ''} ${view.contracting && preIds.includes(id) ? 'contracting' : ''} ${view.entering && view.entering.has(id) ? 'entering' : ''}`;
+        const head = `<button type="button" class="${classes}" data-context-node="${id}" data-od-id="context-node-${id}"><span class="node-kind">${safe(n.label)}</span><span class="node-body"><span class="node-title">${safe(n.title)}</span><span class="node-excerpt">${safe(n.excerpt)}</span></span><span class="node-meta">${safe(n.meta)}</span></button>`;
+        if (!n.tools) return head;
+        const tools = n.tools.map(tool => {
+          const pruned = view.pruned && tool.id === 'runTest';
+          const resultText = pruned ? '工具结果已裁剪 · 由 38 行缩短为 2 条要点' : tool.result;
+          const resultExcerpt = pruned ? '6 项断言通过；覆盖顺序符合预期。' : tool.resultExcerpt;
+          return `<div class="tool-pair"><button type="button" class="tool-call" data-context-node="call-${tool.id}" data-od-id="tool-call-${tool.id}"><span class="tool-chip-label">助手内的工具调用</span>${safe(tool.name)}(${safe(tool.args)})</button>${view.results.has(tool.id) ? `<button type="button" class="tool-result ${pruned ? 'pruned' : ''}" data-context-node="result-${tool.id}" data-od-id="tool-result-${tool.id}"><span class="tool-chip-label">${pruned ? '已裁剪的工具结果' : '对应工具结果'}</span>${safe(resultText)}<br><span>${safe(resultExcerpt)}</span></button>` : '<span class="tool-result">等待工具结果</span>'}</div>`;
+        }).join('');
+        return `<div class="assistant-cluster ${view.contracting && preIds.includes(id) ? 'contracting' : ''}" data-od-id="assistant-cluster-${id}">${head}<div class="tool-pairs">${tools}</div></div>`;
+      }
+      function segment(label, ids, extra = '') {
+        const nodes = ids.map(nodeMarkup).join('');
+        return nodes ? `<section class="turn-segment ${extra}"><div class="turn-label">${label}</div>${nodes}</section>` : '';
+      }
+      function archiveMarkup() {
+        if (view.mode !== 'compact' && view.mode !== 'newSnapshot') return '';
+        return `<details class="archive-panel" data-od-id="compression-inspection"><summary>压缩前 / 压缩后 · 完整旧消息组已从当前上下文移出</summary><div class="archive-nodes"><span>注入快照 #148</span><span>人类 T1 #149</span><span>助手与结果 #150/#151</span><span>助手结论 #152</span><span class="archive-arrow">→</span><span class="archive-summary">摘要 checkpoint #162</span></div><p>以上消息已由摘要替代，最近一轮保持不变。原始消息仍可在会话历史中追溯。</p></details>`;
+      }
+      function inspectorData(id) {
+        if (id.startsWith('call-')) { const t = id.slice(5); const tool = t === 'readConfig' ? content.assistantT1.tools[0] : content.assistantT2.tools[0]; return { title: `工具调用 · ${tool.name}`, meta: '助手消息内的调用元数据', copy: tool.args }; }
+        if (id.startsWith('result-')) { const t = id.slice(7); const tool = t === 'readConfig' ? content.assistantT1.tools[0] : content.assistantT2.tools[0]; const pruned = view.pruned && t === 'runTest'; return { title: pruned ? '工具结果 · 已裁剪' : '工具结果 · 成功', meta: pruned ? '同一 tool/result 在原位置替换' : tool.resultMeta, copy: pruned ? '模型无须再持有 38 行原始输出；保留与调用的配对及两条验证要点。' : tool.resultExcerpt }; }
+        const n = content[id] || content.system;
+        return { title: n.title, meta: n.meta, copy: n.inspector || n.excerpt, bullets: n.bullets, range: n.range };
+      }
+      function inspectorMarkup() {
+        const data = inspectorData(selected);
+        const bulletList = data.bullets ? `<ul class="summary-points">${data.bullets.map(item => `<li>${safe(item)}</li>`).join('')}</ul>` : '';
+        const range = data.range ? `<div class="inspect-copy">${safe(data.range)}</div>` : '';
+        return `<section class="inspect-panel" data-od-id="trajectory-node-inspector" aria-live="polite"><div class="inspect-head"><span class="inspect-title">${safe(data.title)}</span><span class="inspect-meta">${safe(data.meta)}</span></div><p class="inspect-copy">${safe(data.copy)}</p>${bulletList}${range}</section>`;
+      }
+
+      function overviewMarkup() {
+        const labels = { system: '系统', snapshotOld: '快照', humanT1: '用户', assistantT1: '助手', finalT1: '助手', humanT2: '用户', assistantT2: '助手', finalT2: '助手', summary: '压缩摘要', snapshotNew: '快照' };
+        const chip = id => {
+          if (!view.visible.has(id)) return '';
+          const n = content[id];
+          let result = `<button type="button" class="overview-chip ${n.kind} ${view.entering.has(id) ? 'entering' : ''}" data-context-node="${id}">${labels[id]}${n.tools ? '<small>↳ 调用</small>' : ''}</button>`;
+          if (n.tools) result += n.tools.filter(t => view.results.has(t.id)).map(t => `<button type="button" class="overview-chip ${view.pruned && t.id === 'runTest' ? 'pruned' : ''}" data-context-node="result-${t.id}">结果<small>${view.pruned && t.id === 'runTest' ? '已裁剪' : '✓'}</small></button>`).join('');
+          return result;
+        };
+        const compacted = view.mode === 'compact' || view.mode === 'newSnapshot';
+        const old = preIds.map(chip).join('');
+        const middle = compacted ? chip('summary') : old ? `<span class="overview-group ${view.contracting ? 'contracting' : ''}">${old}</span>` : '';
+        const count = [...view.visible].reduce((sum, id) => sum + 1 + (content[id].tools?.filter(t => view.results.has(t.id)).length || 0), 0);
+        return `<div class="overview-wrap"><div class="overview-caption"><span>当前上下文 · ${count} 条消息</span><span>${compacted ? '5 条旧消息 → 1 条摘要' : '虚线组：第 1 轮及注入快照'}</span></div><div class="overview-flow">${chip('system')}${middle}${tailIds.map(chip).join('')}${chip('snapshotNew')}</div></div>`;
+      }
+
+      function renderTrajectory() {
+        const stateClass = view.status.includes('失败') ? 'error' : view.status.includes('生成') || view.status.includes('等待') ? 'committing' : '';
+        const flow = view.mode === 'compact' || view.mode === 'newSnapshot'
+          ? `${segment('会话锚点', ['system'])}${segment('已提交的替换', ['summary'], 'replacement-segment')}${segment('第 2 轮 · 保留的最近消息', tailIds)}${view.mode === 'newSnapshot' ? segment('后续已提交节点', ['snapshotNew']) : ''}`
+          : `${segment('会话锚点', ['system'])}${segment('第 1 轮 · 诊断配置问题', preIds)}${segment('第 2 轮 · 验证修复', tailIds)}`;
+        trajectoryDetail.innerHTML = `${overviewMarkup()}${inspectorMarkup()}<div class="trajectory-intro"><p>沿消息顺序查看当前上下文。工具调用跟随助手消息，工具结果单独显示。</p><span class="context-status ${stateClass}">${safe(view.status)}</span></div><div class="context-track" data-od-id="current-context-track"><div class="track-caption"><span>当前模型可见上下文</span><span>${view.mode === 'compact' || view.mode === 'newSnapshot' ? '摘要 + 最近尾部' : '完整样例消息组'}</span></div>${flow}</div>${archiveMarkup()}<p class="replay-note">只展示消息要点。已压缩的原文仍保留在会话历史中。</p>`;
+        trajectoryState.textContent = view.mode === 'compact' ? '摘要 + T2 · 当前' : view.mode === 'newSnapshot' ? '摘要 + 新注入 · 当前' : view.status.includes('失败') ? 'T1–T2 · 未替换' : 'T1–T2 · 当前';
+      }
+      function resetTrajectory() {
+        runner.id += 1; runner.paused = false; runner.running = false;
+        view = { visible: new Set(baseOrder), results: new Set(['readConfig', 'runTest']), mode: 'base', status: '当前模型可见顺序', pruned: false, contracting: false, entering: new Set() };
+        selected = 'snapshotOld'; renderTrajectory();
+        if (typeof render === 'function') render('latest');
+        document.getElementById('scenario').value = 'latest'; document.getElementById('mobileScenario').value = 'latest';
+        demoPlayback.textContent = '已重置为完整样例上下文'; demoPause.textContent = '暂停';
+      }
+      function wait(ms, runId) {
+        return new Promise(resolve => {
+          let elapsed = 0; let last = performance.now();
+          const tick = now => {
+            if (runId !== runner.id) return resolve(false);
+            if (!runner.paused) elapsed += now - last;
+            last = now;
+            if (elapsed >= ms) return resolve(true);
+            requestAnimationFrame(tick);
+          };
+          requestAnimationFrame(tick);
+        });
+      }
+      async function append(id, runId) {
+        if (!(await wait(360, runId))) return false;
+        view.visible.add(id); view.entering = new Set([id]); view.status = `已提交 · ${content[id].label} 节点进入上下文`; renderTrajectory();
+        for (const tool of content[id].tools || []) {
+          if (!(await wait(360, runId))) return false;
+          view.results.add(tool.id); view.status = '工具结果已返回 · 接入对应调用'; renderTrajectory();
+        }
+        return true;
+      }
+      async function play(kind) {
+        resetTrajectory(); const runId = runner.id; runner.running = true; demoPlayback.textContent = '正在按提交顺序播放';
+        view = { visible: new Set(['system']), results: new Set(), mode: 'base', status: '准备接收已提交节点', pruned: false, contracting: false, entering: new Set() }; selected = 'system'; renderTrajectory();
+        for (const id of baseOrder.slice(1)) if (!(await append(id, runId))) return;
+        if (kind === 'prune') {
+          view.entering = new Set(); view.status = '正在裁剪工具结果 · 保持消息位置'; renderTrajectory();
+          if (!(await wait(520, runId))) return;
+          view.pruned = true; view.status = '工具结果已裁剪 · 未生成摘要'; selected = 'result-runTest'; renderTrajectory(); demoPlayback.textContent = '工具结果在原位置完成裁剪'; runner.running = false; return;
+        }
+        view.entering = new Set(); view.status = '生成摘要中 · 旧节点仍在当前上下文'; renderTrajectory();
+        if (!(await wait(620, runId))) return;
+        if (kind === 'failure') { view.entering = new Set(); view.status = '压缩结束：失败 · 未提交替换'; renderTrajectory(); demoPlayback.textContent = '压缩失败，旧上下文保持不变'; runner.running = false; return; }
+        view.status = '摘要已生成 · 等待替换提交'; renderTrajectory();
+        if (!(await wait(420, runId))) return;
+        view.contracting = true; view.status = '替换已提交 · 旧消息收拢为摘要'; renderTrajectory();
+        if (!(await wait(510, runId))) return;
+        view = { visible: new Set(['system', 'summary', ...tailIds]), results: new Set(['runTest']), mode: 'compact', status: '替换已提交 · 当前模型可见顺序', pruned: false, contracting: false, entering: new Set(['summary']) }; selected = 'summary'; renderTrajectory();
+        if (typeof render === 'function') render('removed');
+        document.getElementById('scenario').value = 'removed'; document.getElementById('mobileScenario').value = 'removed';
+        if (kind === 'newSnapshot') {
+          if (!(await wait(520, runId))) return;
+          view.visible.add('snapshotNew'); view.mode = 'newSnapshot'; view.entering = new Set(['snapshotNew']); view.status = '新快照已提交并进入当前上下文'; selected = 'snapshotNew'; renderTrajectory();
+          if (typeof render === 'function') render('arriving', true);
+          document.getElementById('scenario').value = 'arriving'; document.getElementById('mobileScenario').value = 'arriving';
+          demoPlayback.textContent = '新快照已进入当前上下文';
+        } else demoPlayback.textContent = '压缩完成 · 5 条消息被 1 条摘要替代';
+        runner.running = false;
+      }
+      function syncMotion(value) { motionScenario.value = value; mobileMotionScenario.value = value; }
+      trajectoryToggle.addEventListener('click', () => { const isOpen = trajectoryToggle.getAttribute('aria-expanded') === 'true'; trajectoryToggle.setAttribute('aria-expanded', String(!isOpen)); trajectoryDetail.classList.toggle('open', !isOpen); });
+      trajectoryDetail.addEventListener('click', event => { const button = event.target.closest('[data-context-node]'); if (!button) return; selected = button.dataset.contextNode; view.entering = new Set(); renderTrajectory(); });
+      motionScenario.addEventListener('change', e => syncMotion(e.target.value));
+      mobileMotionScenario.addEventListener('change', e => syncMotion(e.target.value));
+      demoPlay.addEventListener('click', () => play(motionScenario.value));
+      mobilePlay.addEventListener('click', () => play(mobileMotionScenario.value));
+      demoReplay.addEventListener('click', () => play(motionScenario.value));
+      demoPause.addEventListener('click', () => { if (!runner.running) return; runner.paused = !runner.paused; demoPause.textContent = runner.paused ? '继续' : '暂停'; demoPlayback.textContent = runner.paused ? '回放已暂停' : '继续播放'; });
+      renderTrajectory();
+    })();
+  </script>
+</body>
+</html>

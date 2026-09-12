@@ -1,0 +1,158 @@
+{
+  "schemaVersion": 1,
+  "revision": 9,
+  "snapshot": {
+    "status": "present",
+    "seq": 4,
+    "time": 1700000000000,
+    "sections": [
+      {
+        "name": "sandbox:policy",
+        "text": "workspace-write",
+        "truncated": false
+      },
+      {
+        "name": "approval:policy",
+        "text": "ask",
+        "truncated": false
+      }
+    ],
+    "totalSections": 2,
+    "omittedSections": 0
+  },
+  "nodes": [
+    {
+      "seq": 0,
+      "kind": "system",
+      "turn": 1,
+      "step": 1,
+      "title": "system prompt",
+      "excerpt": "you are a coding agent",
+      "truncated": false,
+      "sourceName": "@deepseek-ai/dsh-system-prompt",
+      "toolCalls": [],
+      "resultFor": null
+    },
+    {
+      "seq": 3,
+      "kind": "user",
+      "turn": 1,
+      "step": 1,
+      "title": "user message",
+      "excerpt": "read two files",
+      "truncated": false,
+      "sourceName": null,
+      "toolCalls": [],
+      "resultFor": null
+    },
+    {
+      "seq": 4,
+      "kind": "injected",
+      "turn": 1,
+      "step": 1,
+      "title": "@deepseek-ai/dsh-system-prompt",
+      "excerpt": "<sandbox:policy>\nworkspace-write\n<approval:policy>\nask",
+      "truncated": false,
+      "sourceName": "@deepseek-ai/dsh-system-prompt",
+      "toolCalls": [],
+      "resultFor": null
+    },
+    {
+      "seq": 5,
+      "kind": "assistant",
+      "turn": 1,
+      "step": 1,
+      "title": "read",
+      "excerpt": "calling both",
+      "truncated": false,
+      "sourceName": null,
+      "toolCalls": [
+        {
+          "callId": "call-a",
+          "name": "read",
+          "argsExcerpt": "{\"path\":\"a.ts\"}",
+          "truncated": false
+        },
+        {
+          "callId": "call-b",
+          "name": "grep",
+          "argsExcerpt": "{\"pattern\":\"needle\"}",
+          "truncated": false
+        }
+      ],
+      "resultFor": null
+    },
+    {
+      "seq": 8,
+      "kind": "injected",
+      "turn": 1,
+      "step": 1,
+      "title": "@deepseek-ai/dsh-time-context",
+      "excerpt": "Current time: 2026-09-12T00:00:00Z",
+      "truncated": false,
+      "sourceName": "@deepseek-ai/dsh-time-context",
+      "toolCalls": [],
+      "resultFor": null
+    },
+    {
+      "seq": 9,
+      "kind": "tool-result",
+      "turn": 1,
+      "step": 1,
+      "title": "tool result",
+      "excerpt": "grep output",
+      "truncated": false,
+      "sourceName": null,
+      "toolCalls": [],
+      "resultFor": "call-b"
+    },
+    {
+      "seq": 10,
+      "kind": "tool-result",
+      "turn": 1,
+      "step": 1,
+      "title": "tool result",
+      "excerpt": "file body",
+      "truncated": false,
+      "sourceName": null,
+      "toolCalls": [],
+      "resultFor": "call-a"
+    },
+    {
+      "seq": 12,
+      "kind": "assistant",
+      "turn": 1,
+      "step": 1,
+      "title": "assistant message",
+      "excerpt": "both read",
+      "truncated": false,
+      "sourceName": null,
+      "toolCalls": [],
+      "resultFor": null
+    }
+  ],
+  "totalMessages": 8,
+  "omittedMessages": 0,
+  "latestCompression": null,
+  "attempt": "idle",
+  "latestChange": {
+    "kind": "append",
+    "seq": 12,
+    "before": [],
+    "after": [
+      {
+        "seq": 12,
+        "kind": "assistant",
+        "turn": 1,
+        "step": 1,
+        "title": "assistant message",
+        "excerpt": "both read",
+        "truncated": false,
+        "sourceName": null,
+        "toolCalls": [],
+        "resultFor": null
+      }
+    ],
+    "omittedBeforeCount": 0
+  }
+}

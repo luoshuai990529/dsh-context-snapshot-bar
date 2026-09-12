@@ -1,0 +1,28 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": [
+      "es2024"
+    ],
+    "types": [
+      "node"
+    ],
+    "noEmit": true
+  },
+  "include": [
+    "src",
+    "tests"
+  ],
+  "exclude": [
+    "src/client",
+    "tests/client.spec.tsx",
+    "tests/client-registration.spec.tsx",
+    "tests/motion.spec.ts",
+    "tests/cards.spec.tsx",
+    "tests/preview.spec.tsx",
+    "tests/replay.spec.ts",
+    "lib",
+    "node_modules",
+    "artifacts"
+  ]
+}

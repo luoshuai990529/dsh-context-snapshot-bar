@@ -1,0 +1,13 @@
+# Installed dependencies
+node_modules/
+
+# Build output: `npm run build` emits these, `npm run pack` consumes them
+lib/
+
+# Packed tarballs and the rendered preview the suites write
+artifacts/
+
+# macOS and editor residue
+.DS_Store
+*.tsbuildinfo
+*.log

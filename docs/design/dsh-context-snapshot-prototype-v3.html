@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>DSH 上下文轨迹 · 侧栏面板 v3</title>
+<style>
+  :root {
+    --bg: oklch(0.982 0.003 250);
+    --surface: oklch(1 0 0);
+    --surface-soft: oklch(0.973 0.004 250);
+    --fg: oklch(0.255 0.012 260);
+    --muted: oklch(0.62 0.012 255);
+    --faint: oklch(0.76 0.009 255);
+    --border: oklch(0.89 0.007 255);
+    --accent: oklch(0.61 0.17 256);
+    --accent-soft: oklch(0.95 0.035 256);
+    --warn: oklch(0.61 0.12 78);
+    --danger: oklch(0.59 0.16 28);
+    --rail: oklch(0.86 0.008 255);
+    --font-display: "SF Pro Display", "PingFang SC", "Noto Sans CJK SC", sans-serif;
+    --font-body: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+    --font-mono: "SFMono-Regular", "Cascadia Code", "Noto Sans Mono CJK SC", monospace;
+    --shadow: 0 12px 28px oklch(0.3 0.02 255 / 0.06), 0 2px 5px oklch(0.3 0.02 255 / 0.035);
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; overflow: hidden; }
+  body { color: var(--fg); background: var(--bg); font: 15px/1.7 var(--font-body); }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  button:focus-visible { outline: 3px solid oklch(0.61 0.17 256 / .34); outline-offset: 2px; }
+
+  .app { height: 100dvh; display: grid; grid-template-columns: 244px minmax(0, 1fr); }
+  .sidebar { display: flex; flex-direction: column; padding: 24px 14px 18px; border-right: 1px solid var(--border); background: var(--surface-soft); }
+  .brand { display: flex; gap: 10px; align-items: center; padding: 4px 7px 22px; }
+  .brand-mark { width: 28px; height: 28px; color: var(--fg); }
+  .brand-title { font: 600 16px/1.2 var(--font-display); }
+  .version { display: block; margin-top: 3px; padding: 1px 5px; width: max-content; border-radius: 3px; background: var(--fg); color: var(--surface); font: 600 9px/1.2 var(--font-mono); letter-spacing: .04em; }
+  .new-chat { min-height: 46px; width: 100%; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); font-weight: 550; }
+  .new-chat:hover { background: var(--surface-soft); border-color: var(--faint); }
+  .nav-label { display: block; margin: 22px 7px 9px; color: var(--muted); font-size: 13px; }
+  .folder { display: flex; align-items: center; gap: 8px; min-height: 35px; padding: 0 7px; border-radius: 7px; }
+  .folder.active { background: oklch(0.93 0.006 255); }
+  .line-icon { width: 19px; height: 19px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+  .thread { margin: 2px 0; padding: 8px 10px 8px 36px; border-radius: 7px; color: var(--muted); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .thread.current { background: oklch(0.93 0.006 255); color: var(--fg); font-weight: 550; }
+  /* Panel rows: the trajectory and snapshot panels open in the main column. */
+  .panel-rows { display: grid; gap: 2px; margin-top: auto; }
+  .panel-row { display: flex; align-items: center; gap: 9px; min-height: 36px; padding: 0 8px; border: 0; border-radius: 7px; background: transparent; color: var(--muted); text-align: left; }
+  .panel-row:hover { background: oklch(0.955 0.006 255); color: var(--fg); }
+  .panel-row.active { background: oklch(0.93 0.006 255); color: var(--fg); font-weight: 550; }
+  .panel-row .badge { margin-left: auto; color: var(--muted); font: 11px/1 var(--font-mono); }
+  .settings { margin-top: 6px; border: 0; background: transparent; padding: 9px 8px; text-align: left; color: var(--muted); }
+  .settings:hover { color: var(--fg); }
+
+  .main { min-width: 0; display: grid; grid-template-rows: 70px minmax(0, 1fr); background: var(--surface); }
+  .topbar { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 0 30px 0 36px; border-bottom: 1px solid var(--border); }
+  .conversation-title { margin: 0; font: 600 18px/1.35 var(--font-display); }
+  .top-actions { display: flex; align-items: center; gap: 12px; color: var(--muted); }
+  .mode-label { font-size: 13px; }
+  .quiet-icon { height: 36px; width: 36px; display: grid; place-items: center; border: 0; border-radius: 9px; background: transparent; color: var(--muted); }
+  .quiet-icon:hover { background: var(--surface-soft); color: var(--fg); }
+  .back-chat { display: inline-flex; align-items: center; gap: 7px; min-height: 34px; padding: 0 11px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); font-size: 13px; }
+  .back-chat:hover { background: var(--surface-soft); border-color: var(--faint); }
+
+  /* ── the panel body: one vertical line, nothing masks the conversation ── */
+  .panel-body { min-height: 0; overflow: auto; padding: 26px clamp(24px, 4vw, 54px) 40px; }
+  .panel-head { max-width: 980px; margin: 0 auto 18px; }
+  .panel-title { margin: 0; font: 600 22px/1.35 var(--font-display); }
+  .panel-note { margin: 6px 0 0; max-width: 72ch; color: var(--muted); font-size: 13px; }
+  .panel-stats { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 12px; color: var(--muted); font: 12px/1.5 var(--font-mono); }
+
+  .timeline { max-width: 980px; margin: 0 auto; }
+  .turn { display: grid; grid-template-columns: 78px 20px minmax(0, 1fr); column-gap: 10px; }
+  .turn + .turn { margin-top: 4px; }
+  .turn-label { padding-top: 14px; color: var(--muted); font: 11px/1.4 var(--font-mono); text-align: right; }
+  /* the single rail: continues through every turn, so the whole context reads as one line */
+  .rail { position: relative; }
+  .rail::before { content: ""; position: absolute; top: 0; bottom: 0; left: 50%; width: 1px; transform: translateX(-50%); background: var(--rail); }
+  .turn:first-child .rail::before { top: 22px; }
+  .turn:last-child .rail::before { bottom: auto; height: 22px; }
+  .rail-dot { position: absolute; top: 12px; left: 50%; width: 7px; height: 7px; transform: translateX(-50%); border: 2px solid var(--surface); border-radius: 50%; background: var(--faint); }
+  .turn[data-kind="anchor"] .rail-dot { background: var(--accent); }
+  .turn[data-kind="replaced"] .rail-dot { background: oklch(0.55 0.1 152); }
+
+  .step { position: relative; padding: 10px 12px 10px 14px; border: 1px solid transparent; border-radius: 9px; }
+  .step + .step { margin-top: 4px; }
+  .step::before { content: ""; position: absolute; top: 19px; left: -4px; width: 7px; height: 7px; border-radius: 50%; background: var(--surface-soft); box-shadow: 0 0 0 2px var(--surface); }
+  .step[data-kind="system"]::before { background: var(--faint); }
+  .step[data-kind="injected"]::before { background: var(--accent); }
+  .step[data-kind="human"]::before { background: oklch(0.7 0.1 78); }
+  .step[data-kind="assistant"]::before { background: oklch(0.6 0.02 260); }
+  .step[data-kind="result"]::before { background: oklch(0.72 0.06 152); }
+  .step[data-kind="summary"]::before { background: oklch(0.55 0.1 152); }
+  .step:hover { background: var(--surface-soft); }
+  .step.selected { border-color: var(--accent); background: var(--surface-soft); box-shadow: 0 0 0 2px oklch(0.61 0.17 256 / .1); }
+  .step-head { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+  .step-kind { flex: none; width: 66px; color: var(--muted); font: 11px/1.42 var(--font-mono); }
+  .step-title { font-size: 13px; font-weight: 550; }
+  .step-text { margin: 2px 0 0 76px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+  .step-meta { margin-left: auto; color: var(--faint); font: 10px/1.5 var(--font-mono); white-space: nowrap; }
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; margin: 6px 0 0 76px; }
+  .chip { padding: 2px 7px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--muted); font: 11px/1.5 var(--font-mono); }
+  .chip.result::before { content: "↳ "; }
+  .chip.pruned { background: oklch(0.97 0.03 78); border-color: oklch(0.85 0.06 78); }
+  .chip.call { background: var(--surface-soft); }
+  .step[data-kind="summary"] .step-title::after { content: " · checkpoint"; color: var(--muted); font: 11px/1 var(--font-mono); }
+  .replaced-group { margin: 6px 0 0 76px; padding: 7px 9px; border: 1px dashed var(--border); border-radius: 8px; color: var(--muted); font-size: 12px; }
+  .gap { margin: 6px 0 0 76px; color: var(--muted); font-size: 12px; }
+
+  /* ── the compact snapshot card, still docked above the composer ── */
+  .dock { max-width: 980px; margin: 22px auto 0; }
+  .snapshot-card { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); box-shadow: 0 2px 7px oklch(0.26 0.02 255 / .035); overflow: hidden; }
+  .snapshot-toggle { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 10px; width: 100%; min-height: 50px; padding: 0 14px; border: 0; background: var(--surface); text-align: left; }
+  .snapshot-toggle:hover { background: var(--surface-soft); }
+  .snapshot-toggle[aria-expanded="true"] { border-bottom: 1px solid var(--border); }
+  .snapshot-icon { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 7px; background: var(--accent-soft); color: var(--accent); }
+  .snapshot-main { display: flex; gap: 10px; align-items: center; min-width: 0; }
+  .snapshot-title { font-weight: 550; white-space: nowrap; }
+  .snapshot-summary { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .snapshot-state { color: var(--muted); font-size: 12px; }
+  .snapshot-state.cleared { color: var(--danger); }
+  .snapshot-state.removed { color: var(--warn); }
+  .chevron { width: 17px; height: 17px; transition: transform .18s ease; }
+  .snapshot-toggle[aria-expanded="true"] .chevron { transform: rotate(180deg); }
+  .snapshot-detail { display: none; padding: 14px 16px 16px; }
+  .snapshot-detail.open { display: block; }
+  .meta-row { display: flex; flex-wrap: wrap; gap: 12px; color: var(--muted); font: 12px/1.5 var(--font-mono); }
+  .copy-row { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin: 10px 0 12px; }
+  .source { color: var(--muted); font: 12px/1.45 var(--font-mono); }
+  .copy-button { min-height: 30px; padding: 0 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); font-size: 12px; }
+  .copy-button:hover { background: var(--surface-soft); }
+  .section { border-top: 1px solid var(--border); padding-top: 10px; }
+  .section + .section { margin-top: 10px; }
+  .section-head { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+  .section-label { font-size: 13px; font-weight: 550; }
+  .section-name { color: var(--muted); font: 11px/1.5 var(--font-mono); }
+  .source-text { margin: 7px 0 0; padding: 10px 11px; border-radius: 7px; background: var(--surface-soft); color: oklch(0.37 0.014 255); font: 12px/1.58 var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .snapshot-note { margin: 0 0 10px; color: var(--muted); font-size: 12px; }
+
+  @media (max-width: 1024px) { .app { grid-template-columns: 206px minmax(0, 1fr); } }
+  @media (max-width: 720px) {
+    .app { display: block; }
+    .sidebar { display: none; }
+    .main { min-height: 100dvh; }
+    .panel-body { padding: 18px 14px 30px; }
+    .turn { grid-template-columns: 62px 16px minmax(0, 1fr); column-gap: 7px; }
+    .step-kind { width: 56px; }
+    .step-text, .chips, .replaced-group, .gap { margin-left: 66px; }
+    .turn-label { font-size: 10px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .chevron { transition: none; } }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <aside class="sidebar" aria-label="工作区导航">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 7.1 7.2 4l4.8 3.3L16.8 4 21 7.1l-2.1 7.8-4.5 4.2-2.4-3.1-2.4 3.1-4.5-4.2L3 7.1Zm4.9 2.8 2 1.3 2.1-1.4 2.1 1.4 2-1.3-2-1.4L12 10 9.9 8.6l-2 1.3Z"/></svg>
+      <div><div class="brand-title">DSH 本地构建</div><span class="version">0.1.5-rc2</span></div>
+    </div>
+    <button class="new-chat">⊕&nbsp; 新会话</button>
+    <span class="nav-label">工作区</span>
+    <div class="folder active">
+      <svg class="line-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6.8h6l2 2H21v9.8H3z"/></svg>
+      deepseek-harness
+    </div>
+    <div class="thread current">定位配置加载失败</div>
+    <div class="thread">修复命令行环境变量提示</div>
+    <div class="thread">讨论插件上下文边界</div>
+
+    <!-- Panel rows: each opens a full-column panel instead of covering the chat. -->
+    <div class="panel-rows">
+      <button class="panel-row active" aria-current="page">
+        <svg class="line-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v16M12 8h6M12 13H6M12 18h6"/></svg>
+        上下文轨迹
+        <span class="badge">120</span>
+      </button>
+      <button class="panel-row">
+        <svg class="line-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14v10H5zM9 19h6"/></svg>
+        上下文快照
+        <span class="badge">2</span>
+      </button>
+      <button class="settings">⚙&nbsp; 设置</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <h1 class="conversation-title">上下文轨迹</h1>
+      <div class="top-actions">
+        <button class="back-chat">← 回到对话</button>
+        <span class="mode-label">当前会话 · 只读</span>
+        <button class="quiet-icon" aria-label="更多选项">•••</button>
+      </div>
+    </header>
+
+    <div class="panel-body">
+      <div class="panel-head">
+        <h2 class="panel-title">当前模型可见上下文</h2>
+        <p class="panel-note">一条线按提交顺序向下延伸：每条消息是一个节点，工具调用挂在它的助手消息上，结果紧随其后。被摘要替换的消息组收拢为一条 checkpoint，仍可在会话历史中追溯。</p>
+        <div class="panel-stats">
+          <span>120 条消息</span>
+          <span>3 轮 · 8 步</span>
+          <span>最近提交 #232</span>
+          <span>1 次压缩</span>
+        </div>
+      </div>
+
+      <div class="timeline" id="timeline"></div>
+
+      <div class="dock">
+        <section class="snapshot-card" data-od-id="runtime-context-snapshot" aria-label="运行时上下文快照">
+          <button class="snapshot-toggle" id="snapshotToggle" aria-expanded="false" aria-controls="snapshotDetail">
+            <span class="snapshot-icon" aria-hidden="true">⌁</span>
+            <span class="snapshot-main">
+              <span class="snapshot-title">上下文快照</span>
+              <span class="snapshot-summary">2 项 · 更新于 11:47:36</span>
+            </span>
+            <span class="snapshot-state">当前上下文</span>
+            <svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <div class="snapshot-detail" id="snapshotDetail">
+            <p class="snapshot-note">已由运行时上下文生产者提交；仅当有效快照变化，或原快照已离开模型可见面时追加。</p>
+            <div class="meta-row"><span>11:47:36</span><span>记录 #232</span><span>source.kind=plugin</span></div>
+            <div class="copy-row">
+              <span class="source">来源 @deepseek-ai/dsh-system-prompt</span>
+              <button class="copy-button">复制已展示文本</button>
+            </div>
+            <div class="section">
+              <div class="section-head"><span class="section-label">沙箱文件范围</span><span class="section-name">sandbox:policy</span></div>
+              <pre class="source-text">Current DSH file policy: workspace-write. Any available operation enforced by the DSH file sandbox may modify files under the session workspace: "/Users/buu99y/workspace/github/agents/deepseek-harness". Some platform temporary areas may also be writable.</pre>
+            </div>
+            <div class="section">
+              <div class="section-head"><span class="section-label">操作审批说明</span><span class="section-name">approval:policy</span></div>
+              <pre class="source-text">Approval policy: ask. Operations that require approval may ask through the configured answerers; without an available answerer, the request fails closed.</pre>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+  // Sample nodes only: the built plugin reads every value from the Host projection.
+  const turns = [
+    { label: 'T1 · 1–3 步', kind: 'anchor', steps: [
+      { kind: 'system', name: '系统', title: '会话基础指令', text: '本地编码会话的常驻指令与工作区约定。', meta: '#021' },
+      { kind: 'injected', name: '注入', title: '运行时上下文快照', text: 'sandbox:policy · workspace-write · 2 项', meta: '#232' },
+      { kind: 'human', name: '人类', title: '定位配置加载失败', text: '启动后未读到预期的工作区配置，请定位原因并验证修复路径。', meta: '#149' },
+      { kind: 'assistant', name: '助手', title: '读取配置加载入口', text: '检查 load.ts 的读取路径与覆盖顺序。', meta: '#150',
+        calls: [{ name: 'read_file', args: 'packages/core/config/load.ts', result: '成功 · 找到 42 行加载逻辑' }] },
+      { kind: 'assistant', name: '助手', title: '初步定位', text: '环境变量在工作区配置合并后仍保留旧值。', meta: '#152' }
+    ] },
+    { label: 'T2 · 4–5 步', kind: 'turn', steps: [
+      { kind: 'human', name: '人类', title: '请验证修复路径', text: '先确认最小修复，再运行对应测试。', meta: '#153' },
+      { kind: 'assistant', name: '助手', title: '执行定向验证', text: '运行配置加载测试。', meta: '#154',
+        calls: [{ name: 'run_command', args: 'pnpm test config', result: '成功 · 6 项断言通过', pruned: true }] },
+      { kind: 'assistant', name: '助手', title: '验证完成', text: '修复可将工作区配置重新带入加载链。', meta: '#156' }
+    ] },
+    { label: 'T3 · 6–8 步', kind: 'replaced', steps: [
+      { kind: 'summary', name: '压缩摘要', title: '配置加载诊断摘要', text: '工作区配置的值在合并顺序中被旧环境变量遮蔽；定向验证应覆盖工作区路径优先级。', meta: '#162',
+        replaced: '替换来源 #148、#149、#150、#151、#152 → 1 条 checkpoint' },
+      { kind: 'assistant', name: '助手', title: '继续接入插件', text: '把结论用于当前插件实现，保持核心零修改。', meta: '#233' }
+    ] }
+  ];
+
+  const timeline = document.getElementById('timeline');
+  timeline.innerHTML = turns.map(turn => `
+    <section class="turn" data-kind="${turn.kind}" data-od-id="turn-${turn.label.slice(0, 2)}">
+      <div class="turn-label">${turn.label}</div>
+      <div class="rail"><span class="rail-dot"></span></div>
+      <div class="steps">
+        ${turn.steps.map(step => `
+          <div class="step" data-kind="${step.kind}" tabindex="0">
+            <div class="step-head">
+              <span class="step-kind">${step.name}</span>
+              <span class="step-title">${step.title}</span>
+              <span class="step-meta">${step.meta}</span>
+            </div>
+            <p class="step-text">${step.text}</p>
+            ${step.calls ? `<div class="chips">${step.calls.map(call => `
+              <span class="chip call">${call.name}(${call.args})</span>
+              <span class="chip result ${call.pruned ? 'pruned' : ''}">${call.result}${call.pruned ? ' · 已裁剪' : ''}</span>
+            `).join('')}</div>` : ''}
+            ${step.replaced ? `<div class="replaced-group">${step.replaced}</div>` : ''}
+          </div>
+        `).join('')}
+      </div>
+    </section>
+  `).join('');
+
+  const toggle = document.getElementById('snapshotToggle');
+  const detail = document.getElementById('snapshotDetail');
+  toggle.addEventListener('click', () => {
+    const open = toggle.getAttribute('aria-expanded') === 'true';
+    toggle.setAttribute('aria-expanded', String(!open));
+    detail.classList.toggle('open', !open);
+  });
+  timeline.addEventListener('click', event => {
+    const step = event.target.closest('.step');
+    if (!step) return;
+    timeline.querySelectorAll('.step.selected').forEach(el => el.classList.remove('selected'));
+    step.classList.add('selected');
+  });
+</script>
+</body>
+</html>

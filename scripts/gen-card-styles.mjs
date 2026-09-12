@@ -1,0 +1,150 @@
+/**
+ * Extract the Open Design prototype's stylesheet into the plugin's scoped
+ * stylesheet.
+ *
+ * The prototype in `docs/design/dsh-context-snapshot-prototype-v5.html` is the
+ * visual baseline: the cards must read exactly as it draws them. Hand-copying
+ * its rules invites silent drift, so this script lifts the `<style>` block and
+ * scopes it:
+ *
+ * - `:root` becomes the plugin's own root class, so the prototype's palette
+ *   travels with the plugin and nothing restyles the host page.
+ * - every other rule prefixes each comma-separated selector with that root
+ *   class (prefixing the list as a whole would leave the tail unscoped).
+ * - `@media` / `@supports` / `@layer` keep their condition and have their inner
+ *   rules scoped; `@keyframes` names are prefixed and every `animation` that
+ *   names them is rewritten.
+ *
+ * Comments are dropped: the prototype's are about its demo page, not the cards.
+ *
+ * Run: node scripts/gen-card-styles.mjs
+ */
+
+import { createHash } from 'node:crypto'
+import { readFileSync, writeFileSync } from 'node:fs'
+
+const PROTOTYPE = 'docs/design/dsh-context-snapshot-prototype-v5.html'
+const OUT = 'src/client/styles.ts'
+const ROOT = '.dsh-context-snapshot-bar'
+const KEYFRAME_PREFIX = 'csb-'
+/** At-rules whose block contains rules and therefore carries a condition to keep. */
+const CONDITIONAL = /^@(media|supports|layer)\b/
+
+const source = readFileSync(PROTOTYPE, 'utf8')
+const sha = createHash('sha256').update(source).digest('hex')
+const styleBlock = source.match(/<style>([\s\S]*?)<\/style>/)
+if (styleBlock === null) throw new Error(`${PROTOTYPE}: no <style> block`)
+
+/** Read one brace-balanced block starting at the `{` on `open`. */
+function readBlock(css, open) {
+  let depth = 0
+  for (let index = open; index < css.length; index += 1) {
+    if (css[index] === '{') depth += 1
+    else if (css[index] === '}') {
+      depth -= 1
+      if (depth === 0) return { body: css.slice(open + 1, index), next: index + 1 }
+    }
+  }
+  throw new Error('unbalanced braces in the prototype stylesheet')
+}
+
+/** Parse a stylesheet body into rules, dropping comments. */
+function parseRules(css) {
+  const rules = []
+  let buffer = ''
+  let index = 0
+  while (index < css.length) {
+    const char = css[index]
+    if (char === '/' && css[index + 1] === '*') {
+      const end = css.indexOf('*/', index + 2)
+      index = end === -1 ? css.length : end + 2
+      continue
+    }
+    if (char === '{') {
+      const { body, next } = readBlock(css, index)
+      rules.push({ prelude: buffer.trim(), body })
+      buffer = ''
+      index = next
+      continue
+    }
+    buffer += char
+    index += 1
+  }
+  return rules
+}
+
+/** Split a selector list on top-level commas. */
+function splitSelectors(selector) {
+  const parts = []
+  let depth = 0
+  let current = ''
+  for (const char of selector) {
+    if (char === '(' || char === '[') depth += 1
+    if (char === ')' || char === ']') depth -= 1
+    if (char === ',' && depth === 0) {
+      parts.push(current)
+      current = ''
+      continue
+    }
+    current += char
+  }
+  parts.push(current)
+  return parts.map(part => part.trim()).filter(part => part.length > 0)
+}
+
+/** The prototype's one id-addressed block, mapped onto a class so several cards can coexist. */
+const ID_MAP = [[/#snapshotPane\b/g, '.snapshot-pane']]
+
+/** Scope one selector list, mapping the prototype's `:root` onto the plugin root. */
+function scopeSelectors(selector) {
+  return splitSelectors(selector)
+    .map(part => ID_MAP.reduce((acc, [pattern, replacement]) => acc.replace(pattern, replacement), part))
+    .map(part => (part === ':root' ? ROOT : `${ROOT} ${part}`))
+    .join(',\n')
+}
+
+/** Emit one parsed rule, recursing into conditional at-rules. */
+function emit(rule, indent = '') {
+  const { prelude } = rule
+  if (prelude.startsWith('@')) {
+    if (CONDITIONAL.test(prelude)) {
+      const inner = parseRules(rule.body).map(child => emit(child, `${indent}  `)).join('\n')
+      return `${indent}${prelude} {\n${inner}\n${indent}}`
+    }
+    // @keyframes and any future declaration-only at-rule travel verbatim.
+    return `${indent}${prelude} {\n${rule.body.trim()}\n${indent}}`
+  }
+  return `${indent}${scopeSelectors(prelude)} {\n${indent}  ${rule.body.trim()}\n${indent}}`
+}
+
+const raw = styleBlock[1]
+const keyframeNames = [...raw.matchAll(/@keyframes\s+([A-Za-z0-9_-]+)/g)].map(match => match[1])
+/** Rename keyframes and every animation that names them. */
+function renameKeyframes(css) {
+  let next = css
+  for (const name of keyframeNames) {
+    next = next.replace(new RegExp(`@keyframes\\s+${name}\\b`, 'g'), `@keyframes ${KEYFRAME_PREFIX}${name}`)
+    next = next.replace(new RegExp(`(animation(?:-name)?\\s*:[^;{}]*?)\\b${name}\\b`, 'g'), `$1${KEYFRAME_PREFIX}${name}`)
+  }
+  return next
+}
+
+const scoped = parseRules(renameKeyframes(raw)).map(rule => emit(rule)).join('\n')
+
+const banner = `/**
+ * Scoped stylesheet for the two cards, lifted from the Open Design prototype.
+ *
+ * Generated by \`scripts/gen-card-styles.mjs\` from
+ * \`${PROTOTYPE}\` (sha256 ${sha.slice(0, 12)}…).
+ * Edit that prototype and re-run the script — never this file, so the cards
+ * cannot drift from the design they must match.
+ *
+ * @module dsh-context-snapshot-bar/client/styles
+ */
+
+/** The plugin's scoped stylesheet. */
+export const cardCss = \`
+`
+
+writeFileSync(OUT, `${banner}${scoped}\n\`\n`)
+console.log(`${OUT}: ${(scoped.match(/\{/g) ?? []).length} blocks scoped from ${PROTOTYPE}`)

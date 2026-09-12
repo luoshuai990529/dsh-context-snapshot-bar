@@ -1,0 +1,663 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>DSH 上下文状态栏 · 交互原型</title>
+  <style>
+    :root {
+      --bg: oklch(0.982 0.003 250);
+      --surface: oklch(1 0 0);
+      --surface-soft: oklch(0.973 0.004 250);
+      --fg: oklch(0.255 0.012 260);
+      --muted: oklch(0.62 0.012 255);
+      --faint: oklch(0.76 0.009 255);
+      --border: oklch(0.89 0.007 255);
+      --accent: oklch(0.61 0.17 256);
+      --accent-soft: oklch(0.95 0.035 256);
+      --warn: oklch(0.61 0.12 78);
+      --danger: oklch(0.59 0.16 28);
+      --font-display: "SF Pro Display", "PingFang SC", "Noto Sans CJK SC", sans-serif;
+      --font-body: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+      --font-mono: "SFMono-Regular", "Cascadia Code", "Noto Sans Mono CJK SC", monospace;
+      --shadow: 0 12px 28px oklch(0.3 0.02 255 / 0.06), 0 2px 5px oklch(0.3 0.02 255 / 0.035);
+    }
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; }
+    body { margin: 0; color: var(--fg); background: var(--bg); font-family: var(--font-body); font-size: 15px; line-height: 1.7; }
+    button, select, textarea { font: inherit; }
+    button, select { color: inherit; }
+    button { cursor: pointer; }
+    button:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid oklch(0.61 0.17 256 / 0.34); outline-offset: 2px; }
+    .app { min-height: 100vh; display: grid; grid-template-columns: 244px minmax(0, 1fr); }
+    .sidebar { border-right: 1px solid var(--border); padding: 24px 14px 18px; display: flex; flex-direction: column; background: var(--surface-soft); }
+    .brand { display: flex; gap: 10px; align-items: center; padding: 4px 7px 25px; }
+    .brand-mark { width: 28px; height: 28px; color: var(--fg); }
+    .brand-title { font: 600 16px/1.2 var(--font-display); letter-spacing: 0; }
+    .version { display: block; margin-top: 3px; color: var(--surface); background: var(--fg); width: max-content; padding: 1px 5px; border-radius: 3px; font: 600 9px/1.2 var(--font-mono); letter-spacing: .04em; }
+    .new-chat { min-height: 46px; width: 100%; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); font-weight: 550; letter-spacing: .02em; }
+    .new-chat:hover { background: var(--surface-soft); border-color: var(--faint); }
+    .nav-label { display: block; color: var(--muted); font-size: 13px; letter-spacing: .02em; margin: 23px 7px 10px; }
+    .folder { display: flex; align-items: center; gap: 8px; min-height: 35px; padding: 0 7px; border-radius: 7px; color: var(--fg); }
+    .folder.active { color: var(--fg); background: oklch(0.93 0.006 255); }
+    .folder-icon, .line-icon { width: 19px; height: 19px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+    .thread { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 2px 0; padding: 8px 10px 8px 36px; border-radius: 7px; color: var(--muted); font-size: 14px; }
+    .thread.current { background: oklch(0.93 0.006 255); color: var(--fg); font-weight: 550; }
+    .settings { margin-top: auto; border: 0; background: transparent; padding: 9px 7px; text-align: left; color: var(--muted); }
+    .settings:hover { color: var(--fg); }
+    .main { min-width: 0; display: grid; grid-template-rows: 70px minmax(0, 1fr); background: var(--surface); }
+    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 0 30px 0 36px; border-bottom: 1px solid var(--border); }
+    .conversation-title { margin: 0; font: 600 18px/1.35 var(--font-display); letter-spacing: 0; }
+    .top-actions { display: flex; align-items: center; gap: 12px; color: var(--muted); }
+    .mode-label { font-size: 13px; }
+    .quiet-icon { height: 36px; width: 36px; display: grid; place-items: center; border: 0; border-radius: 9px; background: transparent; color: var(--muted); }
+    .quiet-icon:hover { background: var(--surface-soft); color: var(--fg); }
+    .conversation { min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 270px; }
+    .chat { min-width: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; }
+    .messages { overflow: auto; padding: 45px clamp(28px, 7vw, 130px) 28px; }
+    .message { max-width: 760px; margin: 0 auto 33px; }
+    .user-message { display: flex; justify-content: flex-end; }
+    .user-bubble { max-width: 500px; padding: 12px 16px; border-radius: 15px 15px 4px 15px; background: var(--surface-soft); border: 1px solid var(--border); }
+    .assistant-message h2 { margin: 0 0 14px; font: 600 26px/1.38 var(--font-display); letter-spacing: 0; }
+    .assistant-message p { max-width: 65ch; margin: 0 0 12px; }
+    .assistant-message code { font-family: var(--font-mono); font-size: .9em; color: oklch(0.42 0.04 256); background: var(--surface-soft); border: 1px solid var(--border); padding: 1px 4px; border-radius: 4px; overflow-wrap: anywhere; }
+    .message-meta { display: flex; gap: 14px; align-items: center; color: var(--muted); margin-top: 18px; font-size: 13px; }
+    .message-meta button { padding: 3px; background: none; border: 0; color: var(--muted); }
+    .message-meta button:hover { color: var(--fg); }
+    .composer-area { padding: 0 clamp(22px, 5vw, 84px) 26px; }
+    .dock-wrap { max-width: 900px; margin: 0 auto; }
+    .snapshot-card { border: 1px solid var(--border); background: var(--surface); border-radius: 12px; overflow: hidden; box-shadow: 0 2px 7px oklch(0.26 0.02 255 / .035); }
+    .snapshot-toggle { width: 100%; min-height: 52px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 0 14px; border: 0; background: var(--surface); text-align: left; }
+    .snapshot-toggle:hover { background: var(--surface-soft); }
+    .snapshot-toggle[aria-expanded="true"] { border-bottom: 1px solid var(--border); }
+    .snapshot-icon { display: grid; place-items: center; width: 27px; height: 27px; border-radius: 7px; background: var(--accent-soft); color: var(--accent); }
+    .snapshot-main { display: flex; min-width: 0; gap: 10px; align-items: center; overflow: hidden; }
+    .snapshot-title { white-space: nowrap; font-weight: 550; letter-spacing: .02em; }
+    .snapshot-summary { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 13px; }
+    .snapshot-state { font-size: 12px; color: var(--muted); white-space: nowrap; }
+    .snapshot-state.cleared { color: var(--danger); }
+    .snapshot-state.removed { color: var(--warn); }
+    .snapshot-state.disconnected { color: var(--warn); }
+    .chevron { width: 17px; height: 17px; transition: transform .18s ease; }
+    .snapshot-toggle[aria-expanded="true"] .chevron { transform: rotate(180deg); }
+    .snapshot-detail { display: none; padding: 15px 16px 16px; max-height: 328px; overflow: auto; }
+    .snapshot-detail.open { display: block; }
+    .snapshot-note { margin: 0 0 13px; color: var(--muted); font-size: 12px; line-height: 1.55; }
+    .meta-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin: 0 0 13px; font: 12px/1.5 var(--font-mono); color: var(--muted); }
+    .meta-row span { overflow-wrap: anywhere; }
+    .copy-row { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 0 0 13px; }
+    .source { min-width: 0; color: var(--muted); font: 12px/1.45 var(--font-mono); overflow-wrap: anywhere; }
+    .copy-button { flex: none; min-height: 32px; padding: 0 10px; border: 1px solid var(--border); border-radius: 7px; color: var(--fg); background: var(--surface); font-size: 12px; letter-spacing: .02em; }
+    .copy-button:hover { background: var(--surface-soft); border-color: var(--faint); }
+    .section-list { display: grid; gap: 10px; }
+    .section { border-top: 1px solid var(--border); padding-top: 10px; }
+    .section-head { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+    .section-label { font-size: 13px; font-weight: 550; letter-spacing: .02em; }
+    .section-name { color: var(--muted); font: 11px/1.5 var(--font-mono); overflow-wrap: anywhere; text-align: right; }
+    .source-text { margin: 7px 0 0; padding: 10px 11px; background: var(--surface-soft); border-radius: 7px; color: oklch(0.37 0.014 255); font: 12px/1.58 var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+    .state-change { animation: state-flash 1.1s ease-out; }
+    @keyframes state-flash { from { background: var(--accent-soft); } to { background: transparent; } }
+    .composer { margin-top: 10px; border: 1px solid var(--border); background: var(--surface); border-radius: 18px; box-shadow: var(--shadow); padding: 13px 13px 9px; }
+    .composer textarea { display: block; width: 100%; min-height: 47px; border: 0; resize: none; background: transparent; color: var(--fg); outline: 0; line-height: 1.55; }
+    .composer textarea::placeholder { color: var(--faint); }
+    .composer-bottom { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .scope { display: flex; align-items: center; gap: 7px; min-width: 0; font-size: 13px; color: var(--muted); }
+    .scope span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .send { width: 37px; height: 37px; border: 0; border-radius: 50%; display: grid; place-items: center; color: var(--surface); background: var(--accent); }
+    .send:hover { background: oklch(0.53 0.17 256); transform: translateY(-1px); }
+    .send:active { transform: translateY(1px); }
+    .demo-panel { border-left: 1px solid var(--border); background: var(--surface-soft); padding: 28px 20px; }
+    .demo-eyebrow { margin: 0 0 9px; font-size: 11px; color: var(--muted); font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+    .demo-panel h3 { margin: 0; font: 600 17px/1.4 var(--font-display); letter-spacing: 0; }
+    .demo-panel p { margin: 7px 0 18px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+    .demo-control { display: grid; gap: 7px; }
+    .demo-control label { color: var(--fg); font-size: 13px; font-weight: 550; letter-spacing: .02em; }
+    select { min-height: 39px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); padding: 0 8px; font-size: 13px; }
+    select:hover { border-color: var(--faint); }
+    .demo-divider { height: 1px; background: var(--border); margin: 25px 0 17px; }
+    .demo-list { margin: 0; padding: 0; list-style: none; color: var(--muted); font-size: 12px; line-height: 1.65; }
+    .demo-list li { position: relative; padding-left: 12px; margin-bottom: 8px; }
+    .demo-list li::before { content: ""; position: absolute; top: .66em; left: 0; width: 4px; height: 4px; border-radius: 50%; background: var(--faint); }
+    .mobile-demo { display: none; }
+    @media (max-width: 1180px) { .conversation { grid-template-columns: minmax(0, 1fr) 230px; } .demo-panel { padding: 25px 16px; } .messages { padding-left: 48px; padding-right: 48px; } }
+    @media (max-width: 1024px) { .app { grid-template-columns: 206px minmax(0, 1fr); } .conversation { display: block; } .demo-panel { display: none; } .mobile-demo { display: block; padding: 12px clamp(22px, 5vw, 84px) 0; border-bottom: 1px solid var(--border); } .mobile-demo-inner { max-width: 900px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--muted); font-size: 12px; } .mobile-demo select { min-height: 34px; max-width: 210px; } }
+    @media (max-width: 720px) { .app { display: block; } .sidebar { display: none; } .main { min-height: 100vh; grid-template-rows: 58px minmax(0, 1fr); } .topbar { padding: 0 15px; } .conversation-title { font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .mode-label { display: none; } .top-actions { gap: 2px; } .messages { padding: 28px 18px 18px; } .assistant-message h2 { font-size: 22px; } .message { margin-bottom: 26px; } .composer-area { padding: 0 12px 16px; } .mobile-demo { padding: 9px 12px 0; } .mobile-demo-inner { align-items: flex-start; } .mobile-demo .demo-label { padding-top: 7px; } .mobile-demo select { max-width: 185px; } .snapshot-main { gap: 7px; } .snapshot-summary { display: none; } .snapshot-detail { max-height: 295px; } .section-head { align-items: flex-start; flex-direction: column; gap: 1px; } .section-name { text-align: left; } .copy-row { align-items: flex-start; flex-direction: column; gap: 7px; } }
+    @media (prefers-color-scheme: dark) { :root { --bg: oklch(0.16 0.012 255); --surface: oklch(0.19 0.012 255); --surface-soft: oklch(0.22 0.012 255); --fg: oklch(0.92 0.008 255); --muted: oklch(0.7 0.012 255); --faint: oklch(0.52 0.012 255); --border: oklch(0.31 0.012 255); --accent-soft: oklch(0.26 0.055 256); --shadow: 0 12px 28px oklch(0.06 0.012 255 / .34); } .folder.active, .thread.current { background: oklch(0.27 0.012 255); } .source-text { color: oklch(0.82 0.012 255); } .assistant-message code { color: oklch(0.76 0.1 256); } }
+  
+    /* Keep the composer visible while the transcript and snapshot details scroll independently. */
+    html, body { height: 100%; overflow: hidden; }
+    .app { height: 100dvh; min-height: 0; overflow: hidden; }
+    .main, .chat, .messages { min-height: 0; }
+    .main, .chat { height: 100%; }
+    .snapshot-detail { max-height: min(328px, 40dvh); }
+    .demo-panel { min-height: 0; overflow: auto; }
+    .snapshot-main, .snapshot-state { min-width: 0; }
+    .snapshot-state { max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+    @media (max-width: 1024px) {
+      .conversation { display: grid; grid-template-columns: minmax(0, 1fr); }
+      .chat { grid-template-rows: auto minmax(0, 1fr) auto; }
+      .mobile-demo { padding-bottom: 10px; }
+    }
+    @media (max-width: 720px) {
+      .main { min-height: 0; }
+      .snapshot-toggle { gap: 7px; padding: 0 10px; }
+      .snapshot-title { font-size: 13px; letter-spacing: 0; }
+      .snapshot-main { flex-direction: column; align-items: flex-start; gap: 0; }
+      .snapshot-summary { display: block; max-width: 100%; font-size: 11px; }
+      .snapshot-state { max-width: 112px; font-size: 11px; }
+      .snapshot-detail { max-height: min(295px, 34dvh); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .state-change { animation: none; }
+      .chevron { transition: none; }
+    }
+    /* Current model-visible context: a bounded dock module above the snapshot. */
+    .dock-wrap { max-height: min(556px, 68dvh); display: flex; flex-direction: column; min-height: 0; padding: 1px 1px 0; }
+    .trajectory-card, .snapshot-card { display: flex; flex-direction: column; min-height: 54px; flex: 0 1 auto; }
+    .trajectory-toggle, .snapshot-toggle { flex: none; }
+    .trajectory-detail, .snapshot-detail { min-height: 0; flex: 0 1 auto; }
+    .composer { position: relative; flex: none; }
+    .trajectory-card { margin-bottom: 9px; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--surface); box-shadow: 0 2px 7px oklch(0.26 0.02 255 / .035); }
+    .trajectory-toggle { width: 100%; min-height: 54px; display: grid; grid-template-columns: 28px minmax(0, 1fr) auto 17px; align-items: center; gap: 10px; padding: 0 14px; border: 0; background: var(--surface); color: var(--fg); text-align: left; }
+    .trajectory-toggle:hover { background: var(--surface-soft); }
+    .trajectory-toggle[aria-expanded="true"] { border-bottom: 1px solid var(--border); }
+    .trajectory-glyph { display: grid; place-items: center; width: 27px; height: 27px; border-radius: 7px; color: var(--fg); background: var(--surface-soft); font: 600 16px/1 var(--font-mono); }
+    .trajectory-label { display: flex; gap: 9px; align-items: center; min-width: 0; }
+    .trajectory-title { white-space: nowrap; font-weight: 550; letter-spacing: .02em; }
+    .trajectory-strip { display: flex; gap: 4px; min-width: 0; overflow: hidden; }
+    .strip-token { flex: none; border: 1px solid var(--border); border-radius: 999px; padding: 1px 6px; color: var(--muted); background: var(--surface); font-size: 10px; line-height: 1.5; letter-spacing: .01em; }
+    .trajectory-state { color: var(--muted); white-space: nowrap; font-size: 12px; }
+    .trajectory-toggle .chevron { transition: transform .18s cubic-bezier(.2,0,0,1); }
+    .trajectory-toggle[aria-expanded="true"] .chevron { transform: rotate(180deg); }
+    .trajectory-detail { display: none; padding: 13px 14px 14px; max-height: min(342px, 39dvh); overflow: auto; }
+    .trajectory-detail.open { display: block; }
+    .trajectory-intro { display: flex; flex-direction: column; justify-content: space-between; gap: 5px; align-items: flex-start; margin: 0 0 11px; }
+    .trajectory-intro p { max-width: 64ch; margin: 0; color: var(--muted); font-size: 12px; line-height: 1.55; }
+    .context-status { flex: none; max-width: 100%; white-space: normal; border-radius: 999px; padding: 2px 7px; color: var(--muted); background: var(--surface-soft); font: 11px/1.55 var(--font-mono); white-space: normal; }
+    .context-status.committing { color: var(--fg); background: var(--accent-soft); }
+    .context-status.error { color: var(--danger); background: oklch(0.96 0.025 28); }
+    .context-track { display: grid; gap: 9px; min-width: 0; }
+    .track-caption { display: flex; justify-content: space-between; gap: 12px; color: var(--muted); font-size: 11px; letter-spacing: .02em; }
+    .turn-segment { display: grid; gap: 7px; min-width: 0; }
+    .turn-label { display: flex; align-items: center; gap: 7px; color: var(--muted); font: 11px/1.4 var(--font-mono); }
+    .turn-label::after { content: ""; height: 1px; min-width: 12px; flex: 1; background: var(--border); }
+    .context-node { position: relative; width: 100%; display: grid; grid-template-columns: 58px minmax(0, 1fr) auto; align-items: start; gap: 9px; border: 1px solid var(--border); border-radius: 9px; padding: 9px 10px; background: var(--surface); color: var(--fg); text-align: left; transition: background .18s cubic-bezier(.2,0,0,1), border-color .18s cubic-bezier(.2,0,0,1), transform .42s cubic-bezier(.2,0,0,1), opacity .42s cubic-bezier(.2,0,0,1); }
+    .context-node:hover { background: var(--surface-soft); border-color: var(--faint); }
+    .context-node.selected { border-color: var(--accent); box-shadow: 0 0 0 2px oklch(0.61 0.17 256 / .13); }
+    .context-node.system { color: var(--muted); background: var(--surface-soft); border-style: dashed; }
+    .context-node.injected { background: oklch(0.975 0.009 256); }
+    .context-node.human { background: oklch(0.985 0.004 70); }
+    .context-node.summary { border-color: oklch(0.67 0.08 152); background: oklch(0.97 0.018 152); }
+    .context-node.checkpoint { background: oklch(0.97 0.018 152); }
+    .tool-result.pruned { background: oklch(0.976 0.022 78); }
+    .context-node.entering { animation: node-enter .42s cubic-bezier(.2,0,0,1) both; }
+    .context-node.contracting { opacity: 0; transform: scale(.975); pointer-events: none; }
+    .node-kind { color: var(--muted); font: 11px/1.42 var(--font-mono); }
+    .node-body { min-width: 0; }
+    .node-title { display: block; font-size: 12px; font-weight: 550; letter-spacing: .01em; }
+    .node-excerpt { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; line-height: 1.45; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .node-meta { color: var(--muted); font: 10px/1.5 var(--font-mono); white-space: nowrap; }
+    .tool-pairs { grid-column: 2 / -1; display: grid; gap: 5px; margin-top: 1px; }
+    .tool-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 5px; }
+    .tool-call, .tool-result { min-width: 0; border-radius: 6px; padding: 5px 7px; font: 10px/1.45 var(--font-mono); overflow-wrap: anywhere; }
+    .tool-call { border: 1px solid var(--border); color: var(--fg); background: var(--surface-soft); }
+    .tool-result { position: relative; border: 1px solid var(--border); color: var(--muted); background: var(--surface); }
+    .tool-result::before { content: "↳"; margin-right: 4px; color: var(--muted); }
+    .tool-chip-label { display: block; color: var(--muted); font-family: var(--font-body); font-size: 10px; letter-spacing: .02em; }
+    .inspect-panel { margin-top: 10px; border-top: 1px solid var(--border); padding-top: 10px; }
+    .inspect-head { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+    .inspect-title { font-size: 12px; font-weight: 550; letter-spacing: .02em; }
+    .inspect-meta { color: var(--muted); font: 10px/1.5 var(--font-mono); text-align: right; }
+    .inspect-copy { margin: 5px 0 0; color: var(--muted); font-size: 12px; line-height: 1.55; }
+    .summary-points { margin: 6px 0 0; padding: 0 0 0 17px; color: var(--muted); font-size: 12px; line-height: 1.55; }
+    .summary-points li { margin: 2px 0; }
+    .archive-panel { margin-top: 10px; border-top: 1px solid var(--border); padding-top: 9px; color: var(--muted); font-size: 11px; line-height: 1.52; }
+    .archive-panel summary { cursor: pointer; color: var(--muted); letter-spacing: .01em; }
+    .archive-panel summary:hover { color: var(--fg); }
+    .archive-panel p { margin: 8px 0 0; }
+    .archive-nodes { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+    .archive-nodes span { border: 1px dashed var(--border); border-radius: 5px; padding: 2px 5px; opacity: .66; }
+    .archive-nodes .archive-arrow { border: 0; padding: 0; opacity: 1; }
+    .archive-nodes .archive-summary { border-style: solid; color: var(--fg); opacity: 1; background: oklch(0.97 0.018 152); }
+    .replay-note { margin: 10px 0 0; color: var(--muted); font-size: 11px; line-height: 1.52; }
+    .demo-motion { display: grid; gap: 8px; margin-top: 18px; }
+    .demo-button-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .demo-button { min-height: 34px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); color: var(--fg); font-size: 12px; letter-spacing: .01em; }
+    .demo-button:hover { background: var(--surface-soft); border-color: var(--faint); }
+    .demo-button.primary { border-color: var(--accent); background: var(--accent); color: var(--surface); }
+    .demo-button.primary:hover { background: oklch(0.53 0.17 256); }
+    .demo-playback { color: var(--muted); font-size: 11px; }
+    @keyframes node-enter { from { opacity: 0; transform: translateY(9px); } to { opacity: 1; transform: translateY(0); } }
+    @media (max-width: 720px) {
+      .dock-wrap { max-height: min(596px, 66dvh); }
+      .trajectory-toggle { grid-template-columns: 25px minmax(0, 1fr) auto 15px; gap: 7px; padding: 0 10px; }
+      .trajectory-label { display: grid; gap: 1px; }
+      .trajectory-title { font-size: 13px; }
+      .trajectory-strip { max-width: 188px; }
+      .strip-token { padding: 0 5px; font-size: 9px; }
+      .trajectory-state { max-width: 66px; overflow: hidden; text-overflow: ellipsis; font-size: 11px; }
+      .trajectory-detail { max-height: min(320px, 37dvh); padding: 11px 10px 12px; }
+      .trajectory-intro { display: block; }
+      .context-status { display: inline-block; margin-top: 5px; }
+      .context-node { grid-template-columns: 51px minmax(0, 1fr); gap: 7px; padding: 8px; }
+      .node-meta { display: none; }
+      .tool-pairs { grid-column: 2; }
+      .tool-pair { grid-template-columns: 1fr; }
+      .inspect-meta { max-width: 46%; }
+    }
+    .mobile-demo-controls { display: flex; align-items: center; gap: 6px; min-width: 0; }
+    .mobile-demo-controls select { min-width: 0; max-width: 156px; }
+    .mobile-demo-controls .demo-button { min-width: 54px; }
+    @media (max-width: 720px) { .mobile-demo-inner { flex-wrap: wrap; } .mobile-demo-controls { width: 100%; } .mobile-demo-controls select { flex: 1 1 0; max-width: none; } }
+    @media (prefers-reduced-motion: reduce) {
+      .context-node, .trajectory-toggle .chevron { transition: none; }
+      .context-node.entering { animation: none; }
+    }
+    @media (prefers-color-scheme: dark) {
+      .context-node.injected { background: oklch(0.23 0.027 256); }
+      .context-node.human { background: oklch(0.24 0.012 75); }
+      .context-node.summary, .context-node.checkpoint, .archive-nodes .archive-summary { background: oklch(0.25 0.033 152); }
+      .tool-result.pruned { background: oklch(0.27 0.03 78); }
+      .context-status.error { background: oklch(0.25 0.034 28); }
+    }
+
+    .overview-wrap { position: sticky; top: -13px; z-index: 2; padding: 8px 0 10px; background: var(--surface); border-bottom: 1px solid var(--border); margin-bottom: 10px; }
+    .overview-caption { display: flex; justify-content: space-between; color: var(--muted); font-size: 11px; margin-bottom: 7px; }
+    .overview-flow { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+    .overview-chip { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 34px; min-height: 36px; padding: 3px 5px; border: 1px solid var(--border); border-radius: 6px; font-size: 10px; background: var(--surface-soft); color: var(--muted); }
+    .overview-chip.human { background: oklch(0.96 0.025 78); color: oklch(0.42 0.055 78); }
+    .overview-chip.injected { background: var(--accent-soft); color: var(--accent); }
+    .overview-chip.summary { background: oklch(0.95 0.035 152); color: oklch(0.42 0.09 152); border-color: oklch(0.72 0.08 152); min-width: 68px; }
+    .overview-chip small { font-size: 8px; }
+    .overview-group { display: flex; align-items: center; gap: 3px; padding: 3px; border: 1px dashed var(--border); border-radius: 8px; }
+    .overview-group.contracting { animation: group-contract .48s ease-in both; }
+    .overview-chip.entering { animation: node-enter .42s ease-out both; }
+    .overview-chip.pruned { animation: result-prune .5s ease-out both; background: oklch(0.96 0.04 78); }
+    .assistant-cluster.contracting { animation: group-contract .48s ease-in both; }
+    .context-node.contracting { animation: group-contract .48s ease-in both; }
+    @keyframes group-contract { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(.65); } }
+    @keyframes result-prune { 0% { transform: scale(1); } 45% { transform: scale(.8); } 100% { transform: scale(1); } }
+    @media (max-width: 720px) { .overview-wrap { top: -11px; } .overview-chip { min-width: 26px; padding: 2px 3px; font-size: 9px; } .overview-flow, .overview-group { gap: 2px; } .overview-group { padding: 2px; } }
+    @media (prefers-reduced-motion: reduce) { .overview-chip, .overview-group, .assistant-cluster, .context-node { animation: none !important; transition: none !important; } }
+
+    /* Side-by-side context inspection; the chat dock only contains an entry. */
+    .app { grid-template-columns: 210px minmax(0,1fr); }
+    .conversation { display:grid; grid-template-columns:minmax(0,1fr) 360px; overflow:hidden; }
+    .conversation.panel-closed { grid-template-columns:minmax(0,1fr); }
+    .conversation.panel-closed .context-sidebar { display:none; }
+    .chat { grid-template-rows:minmax(0,1fr) auto; }
+    .mobile-demo { display:none; }
+    .messages { padding:36px clamp(20px,3vw,56px); }
+    .composer-area { padding:0 24px 12px; }
+    .dock-wrap { max-height:none; padding:0; }
+    .composer { margin-top:0; flex:none; }
+    .snapshot-card { margin-top:8px; min-height:44px; border-radius:8px; box-shadow:none; flex:none; }
+    .snapshot-toggle { min-height:44px; padding:0 10px; gap:7px; }
+    .snapshot-icon { width:20px; height:20px; background:transparent; color:var(--muted); }
+    .snapshot-title { font-size:12px; }
+    .snapshot-main { flex-direction:column; align-items:flex-start; gap:0; }
+    .snapshot-summary { display:block; font-size:11px; }
+    .snapshot-state { font-size:11px; max-width:130px; }
+    .snapshot-toggle[aria-expanded="true"] { border-bottom:0; background:var(--surface-soft); }
+    .context-sidebar { display:flex; flex-direction:column; min-width:0; min-height:0; border-left:1px solid var(--border); background:var(--bg); }
+    .context-sidebar-header { display:flex; align-items:center; justify-content:space-between; padding:6px 16px; font-size:13px; font-weight:550; }
+    .context-sidebar-header button { width:44px; height:44px; border:0; background:transparent; color:var(--fg); font-size:22px; border-radius:7px; }
+    .context-sidebar-header button:hover { background:var(--surface-soft); }
+    .context-tabs { display:flex; border-bottom:1px solid var(--border); padding:0 12px; gap:16px; }
+    .context-tabs button { min-height:44px; padding:0 4px; border:0; border-bottom:2px solid transparent; background:transparent; color:var(--fg); font-size:12px; }
+    .context-tabs button[aria-pressed="true"] { border-bottom-color:var(--accent); font-weight:600; }
+    .context-tabs button:hover { background:var(--surface-soft); }
+    .context-sidebar-body { flex:1; min-height:0; display:flex; flex-direction:column; padding:12px; overflow:auto; }
+    .trajectory-card { margin:0; flex:1; min-height:0; box-shadow:none; border-radius:9px; }
+    .trajectory-toggle { grid-template-columns:minmax(0,1fr) auto 15px; padding:0 12px; gap:6px; min-height:48px; }
+    .trajectory-glyph,.trajectory-strip { display:none; }
+    .trajectory-card:has(.trajectory-toggle[aria-expanded="false"]) { flex:none; }
+    .trajectory-title { font-size:13px; }
+    .trajectory-label { display:block; }
+    .trajectory-state { font-size:10px; max-width:none; }
+    .trajectory-detail { flex:1; max-height:none; padding:12px; }
+    .trajectory-intro { margin-bottom:15px; }
+    .track-caption { display:none; }
+    .context-track { position:relative; gap:18px; padding-left:13px; border-left:1px solid var(--border); margin-left:4px; }
+    .turn-segment { gap:3px; }
+    .turn-label { margin-bottom:7px; font-family:var(--font-body); line-height:1.6; }
+    .turn-label::after { display:none; }
+    .context-node { display:grid; grid-template-columns:minmax(0,1fr); gap:2px; border:0; border-radius:6px; padding:8px; min-height:44px; box-shadow:none; }
+    .context-node::before { content:""; position:absolute; left:-18px; top:16px; width:7px; height:7px; border:1px solid var(--border); border-radius:50%; background:var(--surface); }
+    .context-node.human::before { background:var(--fg); border-color:var(--fg); }
+    .context-node.system,.context-node.injected,.context-node.human { background:transparent; }
+    .context-node.selected { background:var(--surface-soft); box-shadow:none; border:0; }
+    .context-node:hover { background:var(--surface-soft); }
+    .node-kind { font:11px/1.5 var(--font-body); }
+    .node-meta { display:none; }
+    .node-title { font-size:12px; font-weight:550; }
+    .node-excerpt { display:none; }
+    .tool-pairs { margin:0 0 5px 8px; padding-left:9px; border-left:1px solid var(--border); }
+    .tool-pair { grid-template-columns:minmax(0,1fr); gap:3px; }
+    .tool-call,.tool-result { min-height:44px; border:0; font-size:11px; padding:7px; text-align:left; }
+    .tool-result { background:transparent; }
+    .tool-call:hover,.tool-result:hover { background:var(--surface-soft); color:var(--fg); }
+    .inspect-panel { margin:0 0 8px 8px; padding:8px; border:1px solid var(--border); border-radius:6px; background:var(--surface); overflow-wrap:anywhere; }
+    .inspect-head { display:block; }
+    .inspect-meta { display:block; text-align:left; margin-top:3px; }
+    .inspect-copy { color:var(--fg); }
+    #snapshotPane { border:1px solid var(--border); border-radius:9px; background:var(--surface); padding:12px; }
+    #snapshotPane h2 { font:550 14px/1.5 var(--font-display); margin:0; }
+    .pane-caption { color:var(--muted); font-size:11px; margin:4px 0 14px; }
+    .snapshot-detail { max-height:none; padding:0; overflow:visible; }
+    .section-head,.copy-row { flex-direction:column; align-items:flex-start; gap:6px; }
+    .section-name { text-align:left; }
+    .sidebar-demo { border-top:1px solid var(--border); flex:none; background:var(--surface-soft); }
+    .sidebar-demo>summary { padding:12px 16px; min-height:44px; cursor:pointer; font-size:12px; color:var(--fg); }
+    .demo-panel { display:block; padding:0 16px 16px; border:0; max-height:220px; overflow:auto; }
+    .demo-panel h3,.demo-eyebrow,.demo-list,.demo-divider { display:none; }
+    .demo-panel p { margin:0 0 10px; font-size:11px; }
+    .demo-motion { margin-top:12px; }
+    .demo-button,.copy-button,select,.send,.quiet-icon { min-height:44px; }
+    .quiet-icon,.send { min-width:44px; }
+    summary:focus-visible { outline:2px solid var(--accent); outline-offset:-3px; }
+    [hidden] { display:none !important; }
+    @media(max-width:1180px) { .app { grid-template-columns:174px minmax(0,1fr); } .conversation { grid-template-columns:minmax(0,1fr) 326px; } .topbar { padding:0 20px; gap:10px; } .composer-area { padding:0 16px 10px; } }
+    @media(max-width:900px) { .app { grid-template-columns:minmax(0,1fr); } .sidebar { display:none; } }
+    @media(max-width:600px) {
+      .app { display:grid; } .main { grid-template-rows:58px minmax(0,1fr); }
+      .conversation { grid-template-columns:minmax(0,1fr); grid-template-rows:minmax(0,1fr) minmax(0,40%); }
+      .conversation.panel-closed { grid-template-rows:minmax(0,1fr); }
+      .context-sidebar { border-left:0; border-top:1px solid var(--border); }
+      .context-sidebar-header { display:none; }
+      .context-tabs { position:relative; padding-right:48px; flex:none; }
+      .mobile-close { position:absolute; right:5px; top:0; width:44px; }
+      .context-sidebar-body { padding:8px 12px; }
+      .trajectory-toggle { min-height:44px; }
+      .trajectory-detail { padding:10px; }
+      .messages { padding:20px 18px; }
+      .assistant-message h2 { font-size:20px; }
+      .message { margin-bottom:20px; }
+      .composer-area { padding:0 12px 8px; }
+      .composer { padding:9px; }
+      .composer textarea { min-height:40px; }
+      .snapshot-state { max-width:120px; }
+      .demo-panel { max-height:120px; }
+    }
+    @media(min-width:601px) { .mobile-close { display:none; } }
+
+    /* Each trajectory item has exactly one role and one concise sentence. */
+    .context-node,.tool-call,.tool-result { display:grid; grid-template-columns:56px minmax(0,1fr); align-items:start; gap:8px; font-family:var(--font-body); }
+    .node-kind { padding-top:1px; font-size:11px; line-height:1.6; }
+    .node-body { font-size:12px; line-height:1.6; font-weight:400; overflow-wrap:anywhere; }
+    .tool-result::before { content:none; }
+
+    .compression-marker { position:relative; display:grid; grid-template-columns:18px minmax(0,1fr); gap:8px; padding:10px; border:1px dashed var(--border); border-radius:7px; background:var(--surface-soft); color:var(--fg); }
+    .compression-marker-symbol { font-size:16px; line-height:1.5; }
+    .compression-marker-label { font-size:11px; font-weight:550; }
+    .compression-marker p { margin:3px 0; font-size:12px; line-height:1.6; overflow-wrap:anywhere; }
+    .compression-marker-caption { font-size:10px; line-height:1.5; color:var(--muted); }
+    .compression-marker.failed .compression-marker-symbol { color:var(--danger); }
+
+    /* Turn-first inspection: every node is exactly two ellipsized lines. */
+    :root { --question-fill:oklch(0.96 0.022 256); --question-ink:oklch(0.39 0.08 256); --summary-fill:oklch(0.96 0.027 155); --summary-ink:oklch(0.37 0.07 155); }
+    .round-intro { display:flex; justify-content:space-between; gap:8px; font-size:11px; color:var(--muted); margin:1px 0 14px; }
+    .round-list { display:grid; gap:12px; min-width:0; }
+    .turn-card { min-width:0; border:1px solid var(--border); border-radius:9px; background:var(--surface); overflow:hidden; }
+    .turn-entry { width:100%; display:block; min-width:0; padding:12px; border:0; color:var(--question-ink); background:var(--question-fill); text-align:left; }
+    .turn-entry:hover { background:oklch(from var(--question-fill) calc(l - .06) c h); }
+    .trace-line { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; max-width:100%; font-size:12px; line-height:20px; }
+    .turn-question { font-weight:550; }
+    .turn-number { font-weight:600; margin-right:5px; }
+    .turn-facts { font-size:11px; color:var(--question-ink); position:relative; padding-right:44px; }
+    .turn-chevron { position:absolute; right:0; top:0; font-size:10px; }
+    .turn-cycles { padding:8px; display:grid; gap:6px; }
+    .trace-leaf { display:block; width:100%; min-width:0; padding:8px 10px; margin:0; border:1px solid var(--border); border-radius:6px; text-align:left; color:var(--fg); background:var(--surface); }
+    button.trace-leaf { min-height:56px; }
+    .trace-leaf .secondary { color:var(--muted); font-size:11px; }
+    button.trace-leaf:hover { background:var(--surface-soft); border-color:var(--faint); }
+    .cycle-node { border-color:transparent; background:var(--surface-soft); }
+    .cycle-index { color:var(--muted); font:11px/20px var(--font-mono); margin-right:8px; }
+    .cycle-info { display:grid; gap:5px; padding:6px 0 2px 10px; border-left:1px solid var(--border); margin:0 0 4px 12px; }
+    .final-leaf { border:0; }
+    .summary-entry,.compression-event,.summary-excerpt { background:var(--summary-fill); color:var(--summary-ink); border-color:oklch(from var(--summary-fill) calc(l - .13) c h); }
+    .summary-entry .secondary,.compression-event .secondary,.summary-excerpt .secondary { color:var(--summary-ink); }
+    button.summary-entry:hover { background:oklch(from var(--summary-fill) calc(l - .06) c h); }
+    .compression-event { border-style:dashed; }
+    .compression-event.failed { color:var(--danger); background:var(--surface-soft); }
+    .compression-event.failed .secondary { color:var(--danger); }
+    .summary-content { display:grid; gap:6px; margin-top:6px; }
+    .system-anchor { border-style:dashed; color:var(--muted); }
+    .archived { opacity:.7; }
+    .round-footnote { color:var(--muted); font-size:11px; line-height:1.6; margin:14px 0 0; }
+    .turn-card.contracting { animation:turn-contract .5s ease both; }
+    @keyframes turn-contract { to { opacity:0; transform:scale(.97); } }
+    @media(prefers-color-scheme:dark) { :root { --question-fill:oklch(0.25 0.034 256); --question-ink:oklch(0.88 0.03 256); --summary-fill:oklch(0.25 0.033 155); --summary-ink:oklch(0.88 0.03 155); } }
+    @media(prefers-reduced-motion:reduce) { .turn-card.contracting { animation:none; } }
+  </style>
+</head>
+<body>
+  <div class="app" data-od-id="dsh-shell">
+    <aside class="sidebar" data-od-id="workspace-sidebar" aria-label="工作区导航">
+      <div class="brand" data-od-id="dsh-brand"><svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 7.1 7.2 4l4.8 3.3L16.8 4 21 7.1l-2.1 7.8-4.5 4.2-2.4-3.1-2.4 3.1-4.5-4.2L3 7.1Zm4.9 2.8 2 1.3 2.1-1.4 2.1 1.4 2-1.3-2-1.4L12 10 9.9 8.6l-2 1.3Z"/></svg><div><div class="brand-title">DSH 本地构建</div><span class="version">0.1.5-rc2</span></div></div>
+      <button class="new-chat" data-od-id="new-chat-button">⊕&nbsp; 新会话</button>
+      <span class="nav-label">工作区</span>
+      <div class="folder active"><svg class="folder-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6.8h6l2 2H21v9.8H3z"/></svg>deepseek-harness</div>
+      <div class="thread current">定位配置加载失败</div>
+      <div class="thread">修复命令行环境变量提示</div>
+      <div class="thread">讨论插件上下文边界</div>
+      <button class="settings" data-od-id="settings-button">⚙&nbsp; 设置</button>
+    </aside>
+    <main class="main" data-od-id="conversation-page">
+      <header class="topbar" data-od-id="conversation-header"><h1 class="conversation-title" data-od-id="conversation-title">定位配置加载失败</h1><div class="top-actions"><span class="mode-label">标准模式</span><button class="quiet-icon" data-od-id="more-menu" aria-label="更多选项">•••</button><button class="quiet-icon" data-od-id="toggle-sidebar" aria-label="打开上下文轨迹" id="openContext" aria-controls="contextSidebar" aria-expanded="true">▯</button></div></header>
+      <div class="conversation">
+        <section class="chat" data-od-id="chat-conversation" aria-label="对话内容">
+          <div class="mobile-demo" data-od-id="mobile-demo-control"><div class="mobile-demo-inner"><span class="demo-label">样例数据 / 演示</span><div class="mobile-demo-controls"><select id="mobileScenario" aria-label="选择快照状态"></select><select id="mobileMotionScenario" aria-label="选择轨迹演示"><option value="compact">压缩回放</option><option value="prune">裁剪结果</option><option value="failure">压缩失败</option><option value="newSnapshot">新快照</option></select><button class="demo-button primary" id="mobilePlay" type="button">播放</button></div></div></div>
+          <div class="messages" data-od-id="message-list">
+            <article class="message user-message" data-od-id="user-message"><div class="user-bubble">启动后没有读到预期的工作区配置，请定位原因并验证修复路径。</div></article>
+            <article class="message assistant-message" data-od-id="assistant-message"><h2 data-od-id="assistant-response-heading">先检查配置加载入口</h2><p>我会先确认工作区路径是否被正确传入，再检查配置合并时的覆盖顺序。</p><p>接下来读取配置文件，并用定向测试验证工作区配置是否按预期生效。</p><div class="message-meta"><span>本地会话</span><span>14:31</span><button aria-label="复制回复">⧉</button><button aria-label="给回复好评">♡</button></div></article>
+          </div>
+          <div class="composer-area" data-od-id="conversation-input-dock">
+            <div class="dock-wrap">
+              <form class="composer" data-od-id="chat-composer"><textarea aria-label="输入消息" placeholder="发消息或创建任务，调用指令、@ 文件或对话"></textarea><div class="composer-bottom"><div class="scope"><span aria-hidden="true">⌘</span><span>工作区内修改</span></div><button class="send" data-od-id="send-message" aria-label="发送消息" type="submit">↑</button></div></form>
+              <section class="snapshot-card" data-od-id="runtime-context-snapshot" aria-label="运行时上下文快照">
+                <button class="snapshot-toggle" data-od-id="snapshot-expand-toggle" id="snapshotToggle" aria-expanded="false" aria-controls="snapshotDetail">
+                  <span class="snapshot-icon" aria-hidden="true">⌁</span><span class="snapshot-main"><span class="snapshot-title" id="snapshotTitle">上下文快照</span><span class="snapshot-summary" id="snapshotSummary">2 项 · 更新于 14:32</span></span><span class="snapshot-state" id="snapshotState">当前上下文</span><svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+
+              </section>
+
+            </div>
+          </div>
+        </section>
+<aside class="context-sidebar" id="contextSidebar" aria-label="当前会话上下文" data-od-id="context-sidebar">
+<div class="context-sidebar-header"><span>会话上下文</span><button id="closeContext" aria-label="收起上下文侧栏" data-od-id="close-context-sidebar">×</button></div>
+<div class="context-tabs" aria-label="选择上下文详情"><button id="trajectoryTab" aria-pressed="true" data-od-id="trajectory-tab">消息轨迹</button><button id="snapshotTab" aria-pressed="false" data-od-id="snapshot-tab">运行时快照</button></div>
+<div class="context-sidebar-body">              <section class="trajectory-card" data-od-id="conversation-context-trajectory" aria-label="对话上下文轨迹">
+                <button class="trajectory-toggle" data-od-id="trajectory-expand-toggle" id="trajectoryToggle" aria-expanded="true" aria-controls="trajectoryDetail">
+                  <span class="trajectory-glyph" aria-hidden="true">≋</span><span class="trajectory-label"><span class="trajectory-title">对话上下文轨迹</span><span class="trajectory-strip" aria-hidden="true"><span class="strip-token">系统</span><span class="strip-token">注入</span><span class="strip-token">人类</span><span class="strip-token">助手·工具</span></span></span><span class="trajectory-state" id="trajectoryState">T1–T2 · 当前</span><svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <div class="trajectory-detail open" id="trajectoryDetail" data-od-id="trajectory-details"></div>
+              </section>
+<section id="snapshotPane" hidden data-od-id="snapshot-sidebar-card"><h2>上下文快照</h2><p class="pane-caption">当前会话最近已提交的记录</p><div class="snapshot-detail open" id="snapshotDetail" data-od-id="snapshot-details"></div></section></div>
+<details class="sidebar-demo" data-od-id="prototype-demo"><summary>样例数据 / 演示</summary>        <div class="demo-panel" data-od-id="demo-controls" aria-label="原型演示控制"><div class="demo-eyebrow">仅用于原型演示</div><h3>演示状态</h3><p>样例数据，仅用于观察组件在已提交事件后的状态变化。</p><div class="demo-control"><label for="scenario">选择快照记录</label><select id="scenario"><option value="latest">最新快照</option><option value="none">尚无记录</option><option value="cleared">已清除</option><option value="removed">已移出当前上下文</option><option value="disconnected">已断开连接</option><option value="arriving">新快照已提交</option></select></div><div class="demo-motion" data-od-id="trajectory-demo-controls"><label for="motionScenario">上下文轨迹回放</label><select id="motionScenario"><option value="compact">压缩成功</option><option value="prune">工具结果裁剪</option><option value="failure">压缩失败</option><option value="newSnapshot">新快照已提交</option></select><div class="demo-button-row"><button class="demo-button primary" id="demoPlay" type="button">播放</button><button class="demo-button" id="demoPause" type="button">暂停</button><button class="demo-button" id="demoReplay" type="button">重播</button></div><span class="demo-playback" id="demoPlayback" aria-live="polite">等待手动播放</span></div><div class="demo-divider"></div><ul class="demo-list"><li>仅属于当前选中会话</li><li>“实时”指已提交事件送达</li><li>不展示模型、令牌、任务或计划指标</li></ul></div></details></aside>
+      </div>
+    </main>
+  </div>
+  <script>
+    const snapshots = {
+      latest: { kind: 'latest', title: '上下文快照', summary: '2 项 · 更新于 14:32', state: '当前上下文', time: '2026-09-11 14:32:18', seq: 'event #148', note: '已在模型步骤准备时提交；仅在有效快照变化或原快照已离开模型可见面时追加。', sections: [
+        ['沙箱文件范围', 'sandbox:policy', 'Current DSH file policy: workspace-write. Any available operation enforced by the DSH file sandbox may modify files under the session workspace: "/workspace/demo". Some platform temporary areas may also be writable.'],
+        ['操作审批说明', 'approval:policy', 'Approval policy: ask. Operations that require approval may ask through the configured answerers; without an available answerer, the request fails closed.']
+      ] },
+      none: { kind: 'none', title: '尚无上下文快照', summary: '当前会话还没有已提交的记录', state: '无记录', time: '', seq: '', note: '这不表示插件被禁用；只是当前会话尚未写入运行时上下文快照。', sections: [] },
+      cleared: { kind: 'cleared', title: '上下文快照已清除', summary: '14:37 提交 · 当前没有适用内容', state: '已清除', time: '2026-09-11 14:37:04', seq: 'event #152', note: '清除事件不会保留旧的当前值。以下是这次提交的原始文本。', raw: 'Current runtime context: none. Earlier runtime-context snapshots no longer apply.', sections: [] },
+      removed: { kind: 'removed', title: '上下文快照', summary: '最近记录 · 14:32', state: '已移出当前上下文', time: '2026-09-11 14:32:18', seq: 'event #148', note: '此记录被压缩或替换后已不在模型当前可见上下文中；保留它只用于追溯最近已提交内容。', sections: [
+        ['沙箱文件范围', 'sandbox:policy', 'Current DSH file policy: workspace-write. Any available operation enforced by the DSH file sandbox may modify files under the session workspace: "/workspace/demo". Some platform temporary areas may also be writable.'],
+        ['操作审批说明', 'approval:policy', 'Approval policy: ask. Operations that require approval may ask through the configured answerers; without an available answerer, the request fails closed.']
+      ] },
+      disconnected: { kind: 'disconnected', title: '上下文快照', summary: '最后已知记录 · 14:32', state: '连接已断开', time: '2026-09-11 14:32:18', seq: 'event #148', note: '连接中断；保留最后已知的已提交记录，未伪造新的更新时间。', sections: [
+        ['沙箱文件范围', 'sandbox:policy', 'Current DSH file policy: workspace-write. Any available operation enforced by the DSH file sandbox may modify files under the session workspace: "/workspace/demo". Some platform temporary areas may also be writable.'],
+        ['操作审批说明', 'approval:policy', 'Approval policy: ask. Operations that require approval may ask through the configured answerers; without an available answerer, the request fails closed.']
+      ] },
+      arriving: { kind: 'arriving', title: '上下文快照', summary: '4 项 · 刚刚提交', state: '当前上下文', time: '2026-09-11 14:40:01', seq: 'event #168', note: '新快照已在提交事件后送达。新增段落以自然顺序呈现；第三方名称不需要预先注册。', sections: [
+        ['沙箱文件范围', 'sandbox:policy', 'Current DSH file policy: workspace-write. Any available operation enforced by the DSH file sandbox may modify files under the session workspace: "/workspace/demo". Some platform temporary areas may also be writable.'],
+        ['操作审批说明', 'approval:policy', 'Approval policy: ask. Operations that require approval may ask through the configured answerers; without an available answerer, the request fails closed.'],
+        ['子代理委派边界', 'subagent:delegation', 'You are a delegated subagent: your permission scope was fixed when you were started and cannot be widened from inside this session — operations that require approval are rejected automatically. When the task needs access beyond that scope, do not retry the denied operation; state the limitation in your reply so the delegating agent can handle it.'],
+        ['第三方上下文', 'acme:review-scope', 'Repository review scope: focus on files changed by the selected session. This third-party section is rendered as-is because section names and text are extensible.']
+      ] }
+    };
+    const labels = { 'sandbox:policy': '沙箱文件范围', 'approval:policy': '操作审批说明', 'subagent:delegation': '子代理委派边界' };
+    let current = 'latest';
+    const toggle = document.getElementById('snapshotToggle');
+    const detail = document.getElementById('snapshotDetail');
+    const title = document.getElementById('snapshotTitle');
+    const summary = document.getElementById('snapshotSummary');
+    const state = document.getElementById('snapshotState');
+    const select = document.getElementById('scenario');
+    const mobileSelect = document.getElementById('mobileScenario');
+    function rawSnapshot(s) { if (s.raw) return s.raw; return 'Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\n' + s.sections.map(([, , text]) => text).join('\n\n'); }
+    function escapeHTML(text) { return text.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c])); }
+    function detailHTML(s) {
+      if (s.kind === 'none') return `<p class="snapshot-note">${s.note}</p>`;
+      const meta = `<div class="meta-row"><span>${s.time}</span><span>${s.seq}</span><span>source.kind=plugin</span></div>`;
+      const copy = `<div class="copy-row"><span class="source">@deepseek-ai/dsh-system-prompt</span><button class="copy-button" type="button" data-od-id="copy-raw-snapshot" id="copySnapshot">复制完整原文</button></div>`;
+      const raw = s.raw ? `<div class="section"><div class="section-head"><span class="section-label">清除记录</span><span class="section-name">runtime-context</span></div><pre class="source-text">${escapeHTML(s.raw)}</pre></div>` : s.sections.map(([label, name, text]) => `<div class="section"><div class="section-head"><span class="section-label">${escapeHTML(labels[name] || label)}</span><span class="section-name">${escapeHTML(name)}</span></div><pre class="source-text">${escapeHTML(text)}</pre></div>`).join('');
+      return `<p class="snapshot-note">${s.note}</p>${meta}${copy}<div class="section-list">${raw}</div>`;
+    }
+    function render(key, flash = false) {
+      current = key; const s = snapshots[key];
+      title.textContent = s.title; summary.textContent = s.summary; state.textContent = s.state;
+      state.className = `snapshot-state ${s.kind}`;
+      detail.innerHTML = detailHTML(s);
+      if (flash) { detail.classList.remove('state-change'); void detail.offsetWidth; detail.classList.add('state-change'); }
+      const copy = document.getElementById('copySnapshot');
+      if (copy) copy.addEventListener('click', async () => { const value = rawSnapshot(s); try { await navigator.clipboard.writeText(value); } catch (_) { const area = document.createElement('textarea'); area.value = value; document.body.append(area); area.select(); document.execCommand('copy'); area.remove(); } copy.textContent = '已复制'; setTimeout(() => copy.textContent = '复制完整原文', 1600); });
+    }
+    Object.entries(snapshots).forEach(([key, s]) => { const option = new Option(select.querySelector(`option[value="${key}"]`).textContent, key); mobileSelect.add(option); });
+    toggle.addEventListener('click', () => window.showContextPanel('snapshot'));
+    [select, mobileSelect].forEach(input => input.addEventListener('change', event => { const key = event.target.value; select.value = key; mobileSelect.value = key; render(key, key === 'arriving'); }));
+    document.querySelector('.composer').addEventListener('submit', e => e.preventDefault());
+    render('latest');
+  </script>
+  <script>
+    (() => {
+      const $ = id => document.getElementById(id);
+      const detail = $('trajectoryDetail');
+      const safe = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+      // Explicit demo estimates, not tokenizer output or provider usage.
+      const turns = [
+        {id:1, question:'启动后未读取工作区配置，请定位加载失败的原因。', humanSeq:149, humanTokens:64, final:'已定位：旧环境变量在合并后遮蔽了工作区配置。', finalSeq:159, finalTokens:118, calls:[
+          {name:'read_file',args:'packages/core/config/load.ts',result:'读取 42 行加载逻辑，确认配置合并入口。',assistantSeq:150,resultSeq:151,tokens:486},
+          {name:'search_files',args:'workspacePath · packages/core/config',result:'找到 3 处路径赋值，环境变量覆盖发生在合并之后。',assistantSeq:154,resultSeq:155,tokens:628},
+          {name:'read_file',args:'packages/core/config/merge.ts',result:'确认覆盖顺序与预期优先级相反。',assistantSeq:157,resultSeq:158,tokens:432}
+        ]},
+        {id:2, question:'请验证最小修复，并检查空配置与环境变量的边界情况。', humanSeq:170,humanTokens:76, final:'6 项断言通过，工作区配置与回退路径符合预期。',finalSeq:181,finalTokens:132,calls:[
+          {name:'read_file',args:'packages/core/config/load.test.ts',result:'现有测试缺少工作区路径优先级的覆盖。',assistantSeq:171,resultSeq:172,tokens:512},
+          {name:'run_command',args:'pnpm test config -- --runInBand',result:'输出 38 行，6 项断言通过。',assistantSeq:175,resultSeq:176,tokens:1384},
+          {name:'run_command',args:'pnpm test config -- --runInBand --testNamePattern="fallback"',result:'空配置和环境变量回退检查通过。',assistantSeq:178,resultSeq:180,tokens:684}
+        ]}
+      ];
+      const shadowedSeqs = [148,149,150,151,154,155,157,158,159];
+      const summaryText = ['工作区配置被后合并的旧环境变量遮蔽。','已检查配置入口、路径赋值与合并逻辑。','后续验证需覆盖路径优先级及空配置回退。'];
+      let progress, phase='', compacted=false, pruned=false, newSnapshot=false;
+      let openTurns=new Set(), openCalls=new Set(), summaryOpen=false, archiveOpen=false;
+      let runId=0, running=false, paused=false, status='当前记录 · 最新轮次在前';
+      function reset() {
+        runId++;running=false;paused=false;phase='';compacted=false;pruned=false;newSnapshot=false;
+        progress=turns.map(t=>({human:true,calls:t.calls.length,results:t.calls.length,final:true}));
+        openTurns=new Set();openCalls=new Set();summaryOpen=false;archiveOpen=false;
+        status='当前记录 · 最新轮次在前';$('demoPause').textContent='暂停';
+      }
+      function lines(first,second,kind='',attributes='') {
+        return `<div class="trace-leaf ${kind}" ${attributes}><span class="trace-line">${safe(first)}</span><span class="trace-line secondary">${safe(second)}</span></div>`;
+      }
+      function estimate(t,p) {
+        return (p.human?t.humanTokens:0)+(p.final?t.finalTokens:0)+t.calls.slice(0,p.calls).reduce((n,c,i)=>n+(i<p.results?(pruned&&t.id===2&&i===1?286:c.tokens):Math.round(c.tokens*.35)),0);
+      }
+      function turnMarkup(t,archived=false) {
+        const p=archived?{human:true,calls:t.calls.length,results:t.calls.length,final:true}:progress[t.id-1];
+        if(!p.human) return '';
+        const key=archived?'archive-'+t.id:String(t.id), open=openTurns.has(key);
+        const contents=t.calls.slice(0,p.calls).map((c,i)=>{
+          const pair=t.id+'-'+i, done=i<p.results, cut=pruned&&t.id===2&&i===1;
+          const result=cut?'工具结果已裁剪 · 保留 6 项通过结论。':done?c.result:'等待工具结果返回。';
+          const expanded=openCalls.has(pair);
+          return `<div class="cycle-group"><button type="button" class="trace-leaf cycle-node" data-cycle="${pair}" data-od-id="cycle-${pair}" aria-expanded="${expanded}" aria-controls="cycle-info-${pair}"><span class="trace-line"><span class="cycle-index">${String(i+1).padStart(2,'0')}</span>助手调用 · ${safe(c.name)}</span><span class="trace-line secondary">${safe(result)}</span></button>${expanded?`<div id="cycle-info-${pair}" class="cycle-info">${lines('参数 · '+c.args,`助手 #${c.assistantSeq} → 工具结果 #${c.resultSeq}`)}${lines('工具结果 · '+(done?'成功':'等待返回'),result)}</div>`:''}</div>`;
+        }).join('');
+        return `<section class="turn-card ${archived?'archived':''} ${phase==='committing'&&t.id===1&&!archived?'contracting':''}" data-od-id="turn-${key}"><button type="button" class="turn-entry" data-turn="${key}" aria-expanded="${open}" aria-controls="turn-content-${key}"><span class="trace-line turn-question"><span class="turn-number">第 ${t.id} 轮 · 提问</span> ${safe(t.question)}</span><span class="trace-line turn-facts">${p.calls} 次工具调用 · ≈ ${estimate(t,p).toLocaleString('en-US')} tokens <span class="turn-chevron">${open?'收起':'展开'} ${open?'⌃':'⌄'}</span></span></button>${open?`<div class="turn-cycles" id="turn-content-${key}">${contents}${p.final?lines('助手结论',t.final,'final-leaf'):''}</div>`:''}</section>`;
+      }
+      function marker() {
+        if(!phase) return '';
+        const states={generating:'已触发压缩，正在生成摘要。',waiting:'摘要已生成，等待替换提交。',committing:'替换已提交，正在收拢旧消息。',committed:'压缩完成，第 1 轮及旧快照已替换。',failed:'压缩失败，原消息保持不变。'};
+        return lines('压缩触发 · 过程记录，不计入模型消息',states[phase],'compression-event '+(phase==='failed'?'failed':''),'role="status" data-od-id="compression-trigger-node"');
+      }
+      function summaryMarkup() {
+        if(!compacted) return '';
+        return `<section class="summary-group"><button type="button" class="trace-leaf summary-entry" data-summary="toggle" data-od-id="summary-checkpoint" aria-expanded="${summaryOpen}" aria-controls="summary-content"><span class="trace-line">压缩摘要 · 第 1 轮与旧快照</span><span class="trace-line secondary">${shadowedSeqs.length} 条消息 → 1 条摘要 · ≈ 196 tokens ${summaryOpen?'⌃':'⌄'}</span></button>${summaryOpen?`<div id="summary-content" class="summary-content">${summaryText.map((text,i)=>lines('摘要摘录 '+(i+1),text,'summary-excerpt')).join('')}${lines('来源 · '+shadowedSeqs.map(n=>'#'+n).join('、'),'checkpoint #190 · 接替旧来源位置')}
+          <button class="trace-leaf archive-toggle" type="button" data-archive="toggle" aria-expanded="${archiveOpen}"><span class="trace-line">${archiveOpen?'收起':'查看'}压缩前的第 1 轮</span><span class="trace-line secondary">已移出当前上下文，仍保留在会话历史中。</span></button>${archiveOpen?turnMarkup(turns[0],true):''}</div>`:''}</section>`;
+      }
+      function paint() {
+        const y=detail.scrollTop;
+        const current = `${newSnapshot?lines('注入上下文 · 新运行时快照','4 项规则已提交，重新进入当前上下文。'):''}${marker()}${turnMarkup(turns[1])}${compacted?summaryMarkup():turnMarkup(turns[0])}${!compacted?lines('注入上下文 · 运行时快照','沙箱与审批规则，共 2 项。'):''}${lines('系统','本地编码会话基础指令。','system-anchor')}`;
+        detail.innerHTML=`<div class="round-intro"><span>最新轮次在前</span><span>点击轮次展开</span></div><div class="round-list" data-od-id="round-context-list">${current}</div><p class="round-footnote">样例数据 · tokens 为显式样例估算，非实测用量。轮次倒序仅用于浏览，不代表模型消息顺序。</p>`;
+        detail.scrollTop=y;$('trajectoryState').textContent=compacted?'摘要 + 第 2 轮':'第 2 → 1 轮';
+        $('demoPlayback').textContent=status;
+      }
+      function snapshotState(key) { if(typeof render==='function')render(key);$('scenario').value=key;$('mobileScenario').value=key; }
+      function wait(ms,id) { return new Promise(resolve=>{let elapsed=0,last=performance.now();function tick(now){if(id!==runId)return resolve(false);if(!paused)elapsed+=now-last;last=now;if(elapsed>=ms)return resolve(true);requestAnimationFrame(tick);}requestAnimationFrame(tick);}); }
+      async function play(kind) {
+        reset();snapshotState('latest');const id=runId;running=true;status='正在播放提交事件';
+        progress=turns.map(()=>({human:false,calls:0,results:0,final:false}));paint();
+        for(const t of turns){const p=progress[t.id-1];if(!await wait(400,id))return;p.human=true;paint();
+          for(let i=0;i<t.calls.length;i++){if(!await wait(400,id))return;p.calls++;paint();if(!await wait(400,id))return;p.results++;paint();}
+          if(!await wait(400,id))return;p.final=true;paint();
+        }
+        if(kind==='prune'){if(!await wait(500,id))return;pruned=true;openTurns.add('2');status='工具结果已裁剪 · 未生成摘要';paint();running=false;return;}
+        phase='generating';status='生成摘要中 · 原消息保留';paint();if(!await wait(1000,id))return;
+        if(kind==='failure'){phase='failed';status='压缩失败 · 未替换原消息';paint();running=false;return;}
+        phase='waiting';status='摘要已生成 · 尚未替换';paint();if(!await wait(700,id))return;
+        phase='committing';status='checkpoint 替换已提交';paint();if(!await wait(500,id))return;
+        phase='committed';compacted=true;snapshotState('removed');status='压缩完成 · 最近第 2 轮保持不变';paint();
+        if(kind==='newSnapshot'){if(!await wait(600,id))return;newSnapshot=true;snapshotState('arriving');status='新快照已提交并进入当前上下文';paint();}running=false;
+      }
+      detail.addEventListener('click',e=>{
+        const b=e.target.closest('button');if(!b)return;
+        let selector='';
+        if(b.dataset.turn){const key=b.dataset.turn;openTurns.has(key)?openTurns.delete(key):openTurns.add(key);selector='[data-turn="'+key+'"]';}
+        else if(b.dataset.cycle){const key=b.dataset.cycle;openCalls.has(key)?openCalls.delete(key):openCalls.add(key);selector='[data-cycle="'+key+'"]';}
+        else if(b.dataset.summary){summaryOpen=!summaryOpen;selector='[data-summary]';}
+        else if(b.dataset.archive){archiveOpen=!archiveOpen;selector='[data-archive]';}else return;
+        paint();detail.querySelector(selector)?.focus({preventScroll:true});
+      });
+      $('trajectoryToggle').addEventListener('click',()=>{const open=$('trajectoryToggle').getAttribute('aria-expanded')!=='true';$('trajectoryToggle').setAttribute('aria-expanded',String(open));detail.classList.toggle('open',open);});
+      for(const id of ['motionScenario','mobileMotionScenario'])$(id).addEventListener('change',e=>{$('motionScenario').value=e.target.value;$('mobileMotionScenario').value=e.target.value;});
+      $('demoPlay').addEventListener('click',()=>play($('motionScenario').value));$('demoReplay').addEventListener('click',()=>play($('motionScenario').value));$('mobilePlay').addEventListener('click',()=>play($('mobileMotionScenario').value));
+      $('demoPause').addEventListener('click',()=>{if(!running)return;paused=!paused;$('demoPause').textContent=paused?'继续':'暂停';$('demoPlayback').textContent=paused?'回放已暂停':status;});
+      reset();paint();
+    })();
+  </script>
+
+  <script>
+    (() => {
+      const shell = document.querySelector('.conversation');
+      const trajectory = document.querySelector('.trajectory-card');
+      const snapshot = document.getElementById('snapshotPane');
+      const trigger = document.getElementById('snapshotToggle');
+      const opener = document.getElementById('openContext');
+      const tabs = [document.getElementById('trajectoryTab'), document.getElementById('snapshotTab')];
+      window.showContextPanel = kind => {
+        shell.classList.remove('panel-closed');
+        const isSnapshot = kind === 'snapshot';
+        trajectory.hidden = isSnapshot; snapshot.hidden = !isSnapshot;
+        tabs[0].setAttribute('aria-pressed', String(!isSnapshot)); tabs[1].setAttribute('aria-pressed', String(isSnapshot));
+        trigger.setAttribute('aria-expanded', String(isSnapshot)); opener.setAttribute('aria-expanded','true');
+        document.getElementById('snapshotDetail').classList.add('open');
+        tabs[isSnapshot ? 1 : 0].focus({preventScroll:true});
+      };
+      function close() { shell.classList.add('panel-closed'); trigger.setAttribute('aria-expanded','false'); opener.setAttribute('aria-expanded','false'); opener.focus({preventScroll:true}); }
+      tabs[0].onclick = () => window.showContextPanel('trajectory'); tabs[1].onclick = () => window.showContextPanel('snapshot');
+      opener.onclick = () => window.showContextPanel('trajectory');
+      document.getElementById('closeContext').onclick = close;
+      const closeMobile = document.createElement('button'); closeMobile.className='mobile-close'; closeMobile.textContent='×'; closeMobile.setAttribute('aria-label','收起上下文侧栏'); closeMobile.setAttribute('data-od-id','close-context-mobile'); closeMobile.onclick=close; document.querySelector('.context-tabs').append(closeMobile);
+      document.getElementById('contextSidebar').addEventListener('keydown', e => { if(e.key === 'Escape') close(); });
+    })();
+  </script>
+</body>
+</html>
