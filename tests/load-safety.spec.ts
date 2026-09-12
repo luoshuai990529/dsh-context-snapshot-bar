@@ -14,7 +14,12 @@ import { Context } from '@deepseek-ai/cordis'
 import { SessionId, SessionStore } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import * as plugin from '../src/index.ts'
-import { PROJECTION_KEY } from '../src/projection/index.ts'
+import { createProjection, PROJECTION_KEY } from '../src/projection/index.ts'
+import { resolveConfig } from '../src/shared/config.ts'
+import type { BarState } from '../src/shared/types.ts'
+import type { SessionEvent } from '@deepseek-ai/dsh-session'
+
+const CONFIG = resolveConfig({})
 
 /** Cordis fiber state, mirrored because the enum has no runtime object to import. */
 const FIBER_ACTIVE = 2
@@ -69,5 +74,42 @@ describe('load safety', () => {
     await fiber
     expect(fiber.state).toBe(FIBER_ACTIVE)
     expect(ctx.sessionProjections.stateOf(session, PROJECTION_KEY)).toBeDefined()
+  })
+})
+
+describe('projection faults', () => {
+  /** A projection whose fault sink records instead of logging. */
+  function projection(): { definition: ReturnType<typeof createProjection>, faults: unknown[] } {
+    const faults: unknown[] = []
+    return { definition: createProjection(CONFIG, error => faults.push(error)), faults }
+  }
+
+  it('keeps the previous state and reports once when the fold faults', () => {
+    // The registry's eager drive calls `apply` inside the Session append with no
+    // guard of its own, so a throw here would disturb a running turn.
+    const { definition, faults } = projection()
+    const state = definition.init({} as never, 0 as never)
+    // A surface append whose payload reads as a message and is not one: the fold
+    // reaches `event.data.message.content` and throws.
+    const malformed = { type: 'system/message', seq: 1, data: {}, surfaceOp: 'append' } as unknown as SessionEvent
+    const once = definition.apply(state, malformed)
+    expect(once).toBe(state)
+    expect(definition.apply(state, malformed)).toBe(state)
+    expect(faults).toHaveLength(1)
+    expect(String(faults[0])).toMatch(/fold failed/)
+  })
+
+  it('falls back to a schema-valid empty view when the view faults', () => {
+    const { definition, faults } = projection()
+    const broken = {} as BarState
+    const view = definition.wire.view(broken)
+    // The same reference twice: the registry compares view references to decide
+    // whether to notify, so a fault must not look like a change.
+    expect(definition.wire.view(broken)).toBe(view)
+    expect(faults).toHaveLength(1)
+    expect(definition.wire.viewSchema.parse(view)).toBeDefined()
+    expect(view.nodes).toEqual([])
+    expect(view.totalMessages).toBe(0)
+    expect(view.latestCompression).toBeNull()
   })
 })

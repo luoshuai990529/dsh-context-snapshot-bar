@@ -74,18 +74,15 @@ describe('bundle manifest', () => {
 })
 
 describe('Host artifact', () => {
-  it('imports only the Session package at runtime', () => {
+  it('imports no harness module at runtime', () => {
     const bundle = read('lib/index.js')
     const specifiers = [...bundle.matchAll(/from\s+"([^"]+)"/g)].map(match => match[1] ?? '')
-    // Each further specifier is another module a harness version can move, and a
-    // bundle that cannot resolve one leaves a fiber-less loader entry, which
-    // aborts `dsh` startup. `zod` stays external so the schema the host parses
+    // A specifier naming a harness module is a module a harness version can
+    // move, and a bundle that cannot resolve one leaves a fiber-less loader
+    // entry, which aborts `dsh` startup. The Host half therefore reads the
+    // Session log itself; `zod` stays external so the schema the host parses
     // comes from one copy.
-    expect([...new Set(specifiers)].sort()).toEqual([
-      '@deepseek-ai/dsh-session/surface',
-      '@deepseek-ai/dsh-session/types',
-      'zod',
-    ])
+    expect([...new Set(specifiers)].sort()).toEqual(['zod'])
   })
 })
 

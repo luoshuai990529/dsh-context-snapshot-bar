@@ -144,6 +144,10 @@ async function checkHostArtifact() {
   if (bundle.includes('node_modules') || bundle.includes(ROOT)) {
     fail('lib/index.js: the artifact embeds a build path, so a dependency was inlined')
   }
+  const harnessImports = [...bundle.matchAll(/from\s+"(@deepseek-ai\/[^"]+)"/g)].map(match => match[1])
+  if (harnessImports.length > 0) {
+    fail(`lib/index.js: imports ${harnessImports.join(', ')}; a harness module that a later version moves leaves a fiber-less Loader entry and aborts dsh startup`)
+  }
   const { stdout } = await run(process.execPath, [`${ROOT}scripts/build.mjs`, '--print-host-externals'], { cwd: ROOT })
     .catch(error => ({ stdout: error.stdout ?? '' }))
   if (!stdout.includes('@deepseek-ai/*')) {

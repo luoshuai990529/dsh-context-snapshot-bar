@@ -13,6 +13,15 @@ Both cards observe committed Session events through the plugin's own Session
 projection. The plugin never writes to the Session log, never calls a model,
 and never changes the agent loop or the compaction policy.
 
+**Harness version.** Built and exercised against **DeepSeek Harness
+`0.1.5-rc.2`** (`dsh` Host + Web), and declared to require
+`>=0.1.5-rc.2 <0.2.0-0` for the two harness packages whose services and log
+format it reads. Nothing in the bundle pins a harness version, and by design it
+cannot keep `dsh web` from starting on a newer `0.1.x` either — see
+[Tested compatibility](#tested-compatibility) for what was verified and
+[Surviving harness upgrades](#surviving-harness-upgrades) for how that guarantee
+is built and how to disable the row in one line if you ever want it gone.
+
 ## Where the two views live
 
 The two cards live in one **context column**: a single tab type of the host's
@@ -179,7 +188,7 @@ presentation; it needs Chrome and never runs in CI.
 ## Install
 
 ```sh
-dsh plugin --profile <profile> add ./dsh-context-snapshot-bar-0.1.0.tgz
+dsh plugin --profile <profile> add ./dsh-context-snapshot-bar-0.1.1.tgz
 dsh --profile <profile> --dump-config   # the "# == dsh-context-snapshot-bar" layer
 dsh --profile <profile>
 ```
@@ -210,9 +219,11 @@ also invalidates the previous URL: reopen the address the launcher prints.
 
 ## Tested compatibility
 
-| Component | Version this bundle was installed and exercised against |
+| Component | Version this bundle was built, installed, and exercised against |
 |---|---|
 | `@deepseek-ai/dsh` (Host and Web) | `0.1.5-rc.2` from npm |
+| Declared range in `peerDependencies` | `@deepseek-ai/dsh-session`, `@deepseek-ai/dsh-session-projection`: `>=0.1.5-rc.2 <0.2.0-0`; `@deepseek-ai/cordis`: `^4.0.2` |
+| Claimed compatible | `0.1.5-rc.2` and every later `0.1.x`, for **starting and running** `dsh`; the card content itself is only verified on `0.1.5-rc.2` |
 
 No other version is claimed compatible. Development used the checkout at
 `c291e7961a` (`dsh-v0.1.5-rc.2-139-gc291e7961a`) as the reference for intended
@@ -221,12 +232,17 @@ artifact, but that checkout was never installed and driven. See
 [docs/compatibility.md](docs/compatibility.md) for the comparison and for the
 list of things that were **not** verified.
 
+The range above is what the plugin asks for, not what it needs to stay out of the
+way: the two peers are consumed as types and service names, and the built Host
+bundle imports no `@deepseek-ai/*` module at all, so a newer harness cannot fail
+to resolve it.
+
 ## Surviving harness upgrades
 
-This bundle must never be the reason `dsh` will not start. A Loader row that
-cannot be resolved, that rejects while activating, or that waits on a service the
-harness no longer provides makes the launcher refuse to start at all, so each of
-those paths is closed here:
+This bundle must never be the reason `dsh` fails to start, or the reason a turn
+already in progress breaks. A Loader row that cannot be resolved, that rejects
+while activating, or that waits on a service the harness no longer provides makes
+the launcher refuse to start at all, so each of those paths is closed here:
 
 - **DSH packages are peers, never dependencies.** A profile's pnpm-managed
   `node_modules` entry takes precedence over the module fallback that links the
@@ -234,12 +250,15 @@ those paths is closed here:
   every other row resolving that name from the same hoisted directory — to the
   copy it was built against, for the life of the profile. Declared as peers, the
   Host half follows whichever `dsh` is running.
-- **One harness import.** The Host bundle imports `@deepseek-ai/dsh-session`
-  (`./types`, `./surface`) and `zod`, and nothing else from the harness;
-  `tests/build.spec.ts` fails on any further specifier. The compaction checkpoint
-  marker is read off the Session log rather than imported from the compaction
-  package, with `tests/compaction.spec.ts` holding that predicate equal to the
-  harness's own.
+- **No harness import at runtime.** The Host bundle imports `zod` and no
+  `@deepseek-ai/*` module at all; `scripts/check-pack.mjs` and
+  `tests/build.spec.ts` both fail on any such specifier. The two Session-log
+  readings the fold needs — sequence branding and whether an event produces a
+  message — and the compaction checkpoint marker are implemented in this
+  package, with `tests/session-log.spec.ts` and `tests/compaction.spec.ts`
+  holding each of them equal to the harness implementation it mirrors. An
+  unresolvable row is impossible while the only external module is a plain
+  dependency the package manager installs.
 - **Soft service binding.** `apply` binds `sessionProjections` through
   `ctx.inject`, so an absent or renamed registry leaves the plugin inactive
   instead of leaving the row pending, and it swallows its own failures: an
@@ -251,19 +270,26 @@ those paths is closed here:
   (`assertEntriesActive`), so the Client half binds its slot, locale, and sidebar
   services through `ctx.inject` as well: a renamed service costs the cards, not
   the GUI.
+- **A total projection.** The registry drives a projection's fold and view with
+  no guard of its own, inside the Session append that committed the event, so a
+  fault there would escape into a running turn. Both are total: a fault returns
+  the state it was given, or the empty view, which are the references the
+  registry compares, and it is reported once instead of per event.
+  `tests/load-safety.spec.ts` faults both and asserts the reference and the
+  report.
 
-What remains is the Session package itself: a harness version that moves
-`@deepseek-ai/dsh-session/surface` or `./types` would leave this row
-unresolvable, and an unresolvable row does stop startup. Recovery needs no code
-change:
+What is left is this package's own presence in the tree: the row stops startup
+only if the bundle's files are removed while its name stays in
+`dsh.profile.bundles`, which is a hand-edited profile rather than a harness
+upgrade. To turn the cards off, remove the bundle:
 
 ```sh
 dsh plugin --profile <profile> remove dsh-context-snapshot-bar
 ```
 
-To keep the bundle installed and disable only its row, use the profile's own
-patch layer (`$DSH_HOME/profiles/<profile>/cordis.patch.yml`), which applies
-after every bundle layer:
+Or keep it installed and disable only its row, in the profile's own patch layer
+(`$DSH_HOME/profiles/<profile>/cordis.patch.yml`), which applies after every
+bundle layer:
 
 ```yaml
 - id: context-snapshot-bar
@@ -338,7 +364,7 @@ pnpm run typecheck   # both compile faces, strict
 pnpm run build       # declarations + Host ESM bundle + Client loader factory
 pnpm test            # unit, artifact, and loader-protocol tests
 pnpm run check:pack  # published file list and artifact contract
-pnpm run pack        # artifacts/dsh-context-snapshot-bar-0.1.0.tgz
+pnpm run pack        # artifacts/dsh-context-snapshot-bar-0.1.1.tgz
 ```
 
 `pnpm test` builds first, because `tests/client-registration.spec.tsx` and

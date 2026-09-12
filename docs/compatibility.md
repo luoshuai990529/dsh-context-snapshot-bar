@@ -26,7 +26,7 @@ the version string.
 | Artifact | Version | Source | How it was obtained |
 |---|---|---|---|
 | `@deepseek-ai/dsh` (Host + Web) | `0.1.5-rc.2` | npm registry | `npm install @deepseek-ai/dsh@0.1.5-rc.2` into `/tmp/dsh-probe-install`; `dist.shasum 2c78db39568d910868f1e4f34062a4f346d4815d`, `dist.integrity sha512-8Xc8hCQHcIWRmTCVU/xZdp6/qMsWMeAd2ObChKDEsfhUPJFXx6H0lgeb1DxUMD86HZrrVN+1bCvn1ppjZ/fOxw==` |
-| `dsh-context-snapshot-bar` | `0.1.0` | local build + `pnpm pack` | `artifacts/dsh-context-snapshot-bar-0.1.0.tgz`, sha256 `b183d83bb93373cb392c5281d03726f1c9dbfa9f0e282d63c37ebd0d2e7b0af5` |
+| `dsh-context-snapshot-bar` | `0.1.1` | local build + `pnpm pack` | `artifacts/dsh-context-snapshot-bar-0.1.0.tgz`, sha256 `b183d83bb93373cb392c5281d03726f1c9dbfa9f0e282d63c37ebd0d2e7b0af5` |
 
 Not tested, and therefore not claimed compatible: the monorepo's own source
 build of `c291e7961a`, every published DSH version other than `0.1.5-rc.2`, and
@@ -79,11 +79,14 @@ across harness upgrades. `zod` stays a plain dependency because it is a leaf
 library with no harness identity, and the Host consumes the projection state
 schema through its `parse` method rather than by brand.
 
-`dsh-session` is the only DSH package the built Host bundle imports at runtime
-(`./types` and `./surface`); the compaction checkpoint marker is read off the
-Session log instead, and `tests/build.spec.ts` fails on any further specifier in
-`lib/index.js`. The remaining DSH entries are type-only and erased before
-bundling.
+The built Host bundle imports no `@deepseek-ai/*` module at all: the compaction
+checkpoint marker, the `SessionSeq` admission rule, and the message-producing
+event rule are implemented in this package and compared with the harness
+implementations by `tests/compaction.spec.ts` and `tests/session-log.spec.ts`.
+`tests/build.spec.ts` and `scripts/check-pack.mjs` fail on any harness specifier
+in `lib/index.js`, which is what keeps an unresolvable row — and a refused `dsh`
+startup — off the table. Every DSH entry is therefore type-only or a service
+name, and is erased before bundling.
 
 `@deepseek-ai/dsh-client-ui-conversation` and `@deepseek-ai/dsh-client-ui-session`
 are development dependencies: the Client bundle imports them type-only and

@@ -31,17 +31,15 @@ export type {
 export const name = 'context-snapshot-bar'
 
 /**
- * Report why this plugin stayed inactive, preferring the host logger.
+ * Report one diagnostic, preferring the host logger.
  *
- * A diagnostic must not become the failure it reports, so the fallback names
- * the plugin on the host's own console when no logger service is reachable.
+ * A diagnostic must not become the failure it reports, so the fallback names the
+ * plugin on the host's own console when no logger service is reachable.
  *
  * @param ctx - a context whose `logger` service may or may not be available.
- * @param error - the failure this plugin swallowed.
+ * @param message - the diagnostic line.
  */
-function reportInactive(ctx: Context, error: unknown): void {
-  const detail = error instanceof Error ? error.message : String(error)
-  const message = `${name}: inactive (${detail})`
+function report(ctx: Context, message: string): void {
   try {
     ctx.logger.warn(message)
   } catch {
@@ -52,6 +50,16 @@ function reportInactive(ctx: Context, error: unknown): void {
 }
 
 /**
+ * Report why this plugin stayed inactive.
+ *
+ * @param ctx - a context whose `logger` service may or may not be available.
+ * @param error - the failure this plugin swallowed.
+ */
+function reportInactive(ctx: Context, error: unknown): void {
+  report(ctx, `${name}: inactive (${error instanceof Error ? error.message : String(error)})`)
+}
+
+/**
  * Register the projection for this deployment's configuration.
  *
  * The registration is bound softly and its failures are swallowed: `dsh` refuses
@@ -59,7 +67,9 @@ function reportInactive(ctx: Context, error: unknown): void {
  * rejects, or that stays pending on an unavailable service. A context card must
  * never cost a user the harness, so an absent `sessionProjections` service, an
  * unusable configuration, or a changed projection API leaves this plugin
- * inactive with one diagnostic instead of a dead `dsh`.
+ * inactive with one diagnostic instead of a dead `dsh`. The registered fold and
+ * view are total for the same reason: the registry drives them without a guard
+ * of its own, inside the Session append that committed the event.
  *
  * @param ctx - the plugin's Cordis context.
  * @param config - untrusted configuration from the composition; validated here at load.
@@ -69,8 +79,11 @@ export function apply(ctx: Context, config: unknown): void {
     const resolved = resolveConfig(config)
     ctx.inject(['sessionProjections'], (projections) => {
       try {
+        const projection = createProjection(resolved, (error) => {
+          report(projections, error instanceof Error ? error.message : String(error))
+        })
         projections.effect(
-          () => projections.sessionProjections.register(createProjection(resolved)),
+          () => projections.sessionProjections.register(projection),
           `${PROJECTION_KEY}: session projection`,
         )
         projections.logger.info('projection %s registered', PROJECTION_KEY)

@@ -6,7 +6,8 @@
  * @module dsh-context-snapshot-bar/projection/node
  */
 
-import { SessionSeq, type SessionEvent } from '@deepseek-ai/dsh-session/types'
+import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
+import { sessionSeq } from '../session-log.ts'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { isCheckpointSource } from '../compaction-events.ts'
 import type { NodeKind, NodeView, SectionView, ToolCallView, ToolCallId } from '../shared/types.ts'
@@ -156,7 +157,7 @@ export function nodeFromEvent(
   const sourceName = source.kind === 'plugin' ? source.plugin ?? null : null
   const inheritsBoundary = event.type === 'user/message'
   return {
-    seq: SessionSeq(event.seq),
+    seq: sessionSeq(event.seq),
     kind: kindOf(event.type, source),
     turn: payload.turn ?? (inheritsBoundary ? owning.turn : null),
     step: payload.step ?? (inheritsBoundary ? owning.step : null),

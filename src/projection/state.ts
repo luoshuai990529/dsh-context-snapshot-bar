@@ -8,8 +8,8 @@
  * @module dsh-context-snapshot-bar/projection/state
  */
 
-import { SessionSeq, type SessionEvent } from '@deepseek-ai/dsh-session/types'
-import { deriveEventMessage } from '@deepseek-ai/dsh-session/surface'
+import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
+import { producesMessage, sessionSeq } from '../session-log.ts'
 import type {} from '../compaction-events.ts'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type {
@@ -117,8 +117,8 @@ function reduceCommitted(state: BarState, event: SessionEvent, config: Config): 
       return {
         ...state,
         pendingPrune: {
-          startSeq: SessionSeq(event.data.shadowedRange.start),
-          endSeq: SessionSeq(event.data.shadowedRange.end),
+          startSeq: sessionSeq(event.data.shadowedRange.start),
+          endSeq: sessionSeq(event.data.shadowedRange.end),
         },
       }
     case 'session/end-seed':
@@ -164,8 +164,8 @@ function foldSurfaceEvent(state: BarState, event: SessionEvent, config: Config):
   const op = envelope.surfaceOp
   if (op === 'append') {
     const entry: SurfaceEntry = {
-      seq: SessionSeq(event.seq),
-      message: deriveEventMessage(event) === null
+      seq: sessionSeq(event.seq),
+      message: !producesMessage(event)
         ? null
         : nodeFromEvent(event, config, [], { turn: state.turn, step: state.step }),
     }
@@ -175,7 +175,7 @@ function foldSurfaceEvent(state: BarState, event: SessionEvent, config: Config):
       snapshot: snapshotAfter(state.snapshot, event, config),
       latestChange: {
         kind: 'append',
-        seq: SessionSeq(event.seq),
+        seq: sessionSeq(event.seq),
         before: [],
         after: entry.message === null ? [] : [entry.message],
         omittedBeforeCount: 0,
@@ -190,8 +190,8 @@ function foldSurfaceEvent(state: BarState, event: SessionEvent, config: Config):
   if (startIdx === -1 || endIdx === -1 || startIdx > endIdx) return state
   const removed = state.surface.slice(startIdx, endIdx + 1)
   const entry: SurfaceEntry = {
-    seq: SessionSeq(event.seq),
-    message: deriveEventMessage(event) === null
+    seq: sessionSeq(event.seq),
+    message: !producesMessage(event)
         ? null
         : nodeFromEvent(event, config, [], { turn: state.turn, step: state.step }),
   }
@@ -207,7 +207,7 @@ function foldSurfaceEvent(state: BarState, event: SessionEvent, config: Config):
     pendingPrune: null,
     latestChange: {
       kind: state.pendingPrune === null ? 'replace' : 'prune',
-      seq: SessionSeq(event.seq),
+      seq: sessionSeq(event.seq),
       before,
       after: entry.message === null ? [] : [entry.message],
       omittedBeforeCount: 0,
@@ -237,7 +237,7 @@ function snapshotAfter(current: SnapshotState, event: SessionEvent, config: Conf
   if (source.form === 'snapshot' && Array.isArray(source.sections)) {
     return {
       status: 'present',
-      seq: SessionSeq(event.seq),
+      seq: sessionSeq(event.seq),
       time,
       sections: source.sections.map(section => {
         const bounded = excerpt(section.text, config.snapshotPreviewChars)
@@ -246,7 +246,7 @@ function snapshotAfter(current: SnapshotState, event: SessionEvent, config: Conf
     }
   }
   if (fullTextOf(payload.content) === SNAPSHOT_CLEARED_BODY) {
-    return { status: 'cleared', seq: SessionSeq(event.seq), time, sections: [] }
+    return { status: 'cleared', seq: sessionSeq(event.seq), time, sections: [] }
   }
   return current
 }
@@ -321,7 +321,7 @@ function settleCompaction(
   return {
     pending: state.pending.filter((_, index) => index !== matchIdx),
     compression: {
-      replacementSeq: SessionSeq(event.seq),
+      replacementSeq: sessionSeq(event.seq),
       generatedExcerpt: pending.summaryExcerpt,
       checkpoint,
       before: kept,
@@ -342,10 +342,10 @@ function foldSummary(
   event: Extract<SessionEvent, { type: 'compaction/summary' }>,
 ): BarState {
   const pending: PendingCompaction = {
-    summarySeq: SessionSeq(event.seq),
-    startSeq: SessionSeq(event.data.shadowedRange.start),
-    endSeq: SessionSeq(event.data.shadowedRange.end),
-    shadowedSeqs: event.data.shadowedSeqs.map(seq => SessionSeq(seq)),
+    summarySeq: sessionSeq(event.seq),
+    startSeq: sessionSeq(event.data.shadowedRange.start),
+    endSeq: sessionSeq(event.data.shadowedRange.end),
+    shadowedSeqs: event.data.shadowedSeqs.map(seq => sessionSeq(seq)),
     summaryExcerpt: fullTextOf(event.data.summary),
   }
   return { ...state, pending: [...state.pending, pending], attempt: 'awaiting-replacement' }
