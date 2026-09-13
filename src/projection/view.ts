@@ -73,10 +73,13 @@ function buildView(state: BarState, config: Config): BarView {
 /**
  * Select the nodes the Client receives.
  *
- * The system prompt is the request's standing instructions, so it is kept as an
- * anchor even when the tail window no longer reaches it; the remaining budget
- * holds the newest nodes. Nothing outside the window is presented as if it were
- * visible.
+ * Two nodes are kept as anchors even when a long Session's tail window no longer
+ * reaches them: the system prompt, which is the request's standing
+ * instructions, and the newest runtime-context record, which is the other input
+ * every request carries. Without the second, a Session long enough to drop it
+ * would show a trajectory with no runtime-context node at all — and no sign that
+ * one exists. The remaining budget holds the newest nodes, and nothing outside
+ * the window is presented as if it were visible.
  *
  * @param nodes - every current message view, oldest first.
  * @param config - the resolved plugin configuration.
@@ -84,10 +87,13 @@ function buildView(state: BarState, config: Config): BarView {
  */
 function boundNodes(nodes: readonly NodeView[], config: Config): readonly NodeView[] {
   if (nodes.length <= config.visibleNodeLimit) return nodes
-  const anchor = nodes[0]?.kind === 'system' ? nodes[0] : undefined
-  const budget = anchor === undefined ? config.visibleNodeLimit : config.visibleNodeLimit - 1
+  const system = nodes[0]?.kind === 'system' ? nodes[0] : undefined
+  const runtime = nodes.findLast(node => node.runtimeSnapshot !== undefined)
+  const anchors = [system, runtime].filter((node): node is NodeView => node !== undefined)
+  const budget = Math.max(1, config.visibleNodeLimit - anchors.length)
   const tail = nodes.slice(nodes.length - budget)
-  return anchor === undefined ? tail : [anchor, ...tail]
+  const kept = new Set([...anchors, ...tail])
+  return nodes.filter(node => kept.has(node))
 }
 
 /**

@@ -227,6 +227,42 @@ describe('recovery cut points', () => {
   })
 })
 
+describe('runtime-snapshot anchoring', () => {
+  it('keeps the newest runtime record when the window cannot reach it', () => {
+    // A long Session drops its older nodes; the runtime-context record is the
+    // other input every request carries, so it is anchored like the system
+    // prompt rather than disappearing with the tail it fell out of.
+    const builder = logBuilder('session-runtime-anchor')
+    builder.systemPrompt('prompt')
+    builder.turnStart(1)
+    builder.stepStart(1, 1)
+    builder.userMessage('first question', 1, 1)
+    const record = builder.snapshot([{ name: 'sandbox:policy', text: 'workspace-write' }])
+    for (let index = 0; index < 400; index += 1) builder.userMessage(`message ${index}`, 1, 1)
+    const view = toView(foldAll(builder.events), resolveConfig({ visibleNodeLimit: 20 }))
+    expect(view.nodes.length).toBeLessThanOrEqual(20)
+    const anchored = view.nodes.find(node => Number(node.seq) === Number(record.seq))
+    expect(anchored?.runtimeSnapshot?.status).toBe('present')
+    expect(anchored?.runtimeSnapshot?.sections).toHaveLength(1)
+    // The anchored node keeps its own position, not the tail's.
+    expect(view.nodes.indexOf(anchored as never)).toBeLessThan(5)
+  })
+
+  it('anchors a cleared record too, which is a state rather than an absence', () => {
+    const builder = logBuilder('session-runtime-cleared-anchor')
+    builder.systemPrompt('prompt')
+    builder.turnStart(1)
+    builder.stepStart(1, 1)
+    builder.userMessage('first question', 1, 1)
+    builder.snapshot([{ name: 'sandbox:policy', text: 'workspace-write' }])
+    const cleared = builder.clearSnapshot()
+    for (let index = 0; index < 400; index += 1) builder.userMessage(`message ${index}`, 1, 1)
+    const view = toView(foldAll(builder.events), resolveConfig({ visibleNodeLimit: 20 }))
+    const anchored = view.nodes.find(node => Number(node.seq) === Number(cleared.seq))
+    expect(anchored?.runtimeSnapshot?.status).toBe('cleared')
+  })
+})
+
 describe('wire bounds', () => {
   it('bounds a long log and a single oversized tool result', () => {
     const builder = logBuilder('session-wire-bounds')
@@ -242,8 +278,12 @@ describe('wire bounds', () => {
     const elapsed = performance.now() - started
     const payload = JSON.stringify(view)
     expect(view.totalMessages).toBe(10_003)
+    // The system prompt and the newest runtime record are anchors: they survive
+    // the window, so what is omitted is the window's own budget, not the count.
+    const anchors = view.nodes.filter(node => node.kind === 'system' || node.runtimeSnapshot !== undefined).length
     expect(view.omittedMessages).toBe(10_003 - CONFIG.visibleNodeLimit)
     expect(view.nodes.length).toBeLessThanOrEqual(CONFIG.visibleNodeLimit)
+    expect(anchors).toBe(1)
     for (const node of view.nodes) expect(node.excerpt.length).toBeLessThanOrEqual(CONFIG.excerptChars)
     // Recorded so a regression in payload size or fold cost is visible; not a
     // latency promise. The fold is the cost a cold drive pays: it walks the whole

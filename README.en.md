@@ -20,7 +20,7 @@ The plugin reads committed Session events. It does not write to the session log 
 | Component | Version |
 | --- | --- |
 | DSH with recorded installation and runtime verification | **`0.1.5-rc.2` (Host + Web)** |
-| Current plugin version | `0.3.0` (source; npm has `0.2.0`) |
+| Current plugin version | `0.3.1` (source; npm has `0.2.0`) |
 | Declared Session / Projection peer range | `>=0.1.5-rc.2 <0.2.0-0` |
 | Node.js | `^22.19.0 \|\| >=24.0.0` |
 

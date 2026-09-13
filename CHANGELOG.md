@@ -4,6 +4,16 @@ Versions describe the bundle's own contract. An installed copy is identified by
 the content hash `dsh plugin add` writes into its vendor file name, so two builds
 of one version never share an identity; only the versions below were published.
 
+## 0.3.1
+
+**The newest runtime record survives the node window.** The view publishes the
+system prompt and the newest runtime-context record as anchors, because they are
+the two inputs every request carries: without the second anchor, any Session long
+enough to drop the record from the tail window showed a trajectory with no
+runtime-context node at all, and no sign that one existed. Measured on a live
+Session: 1075 nodes, 120 published, the record at position 7 — anchored now, and
+the omission count still reports what the window left out.
+
 ## 0.3.0
 
 **Runtime snapshot nodes in the trajectory.** Each retained runtime-context
