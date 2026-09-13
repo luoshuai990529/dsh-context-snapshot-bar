@@ -85,6 +85,11 @@ export const nodeViewSchema: z.ZodType<NodeView> = z.object({
   sourceName: z.string().nullable(),
   toolCalls: z.array(toolCallViewSchema),
   resultFor: toolCallIdSchema().nullable(),
+  runtimeSnapshot: z.object({
+    status: z.enum(['present', 'cleared']),
+    sections: z.array(z.object({ name: z.string(), text: z.string(), truncated: z.boolean() })),
+    totalSections: z.number().int().nonnegative(),
+  }).optional(),
 })
 
 /** Schema for {@link SectionView}. */

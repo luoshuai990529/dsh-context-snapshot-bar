@@ -6,6 +6,7 @@
  * main-column panels with the matching sidebar rows.
  */
 
+import { createContext as createReactContext } from 'react'
 import { existsSync, readFileSync } from 'node:fs'
 import { createContext, runInContext } from 'node:vm'
 import { describe, expect, it, vi } from 'vitest'
@@ -210,7 +211,7 @@ function fakeClientContext(): FakeClientContext & { ctx: unknown } {
 }
 
 describe('Client half', () => {
-  const reactStub = { useState: (initial: unknown) => [initial, () => undefined] }
+  const reactStub = { createContext: createReactContext, useState: (initial: unknown) => [initial, () => undefined] }
   const jsxRuntimeStub = {
     jsx: (type: unknown, props: unknown) => ({ type, props }),
     jsxs: (type: unknown, props: unknown) => ({ type, props }),

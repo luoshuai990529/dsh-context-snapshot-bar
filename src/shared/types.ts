@@ -56,6 +56,8 @@ export interface NodeView {
   toolCalls: readonly ToolCallView[]
   /** The call this node answers, for tool results; null otherwise. */
   resultFor: ToolCallId | null
+  /** Bounded data belonging to this runtime snapshot; absent on other messages. */
+  runtimeSnapshot?: { status: 'present' | 'cleared'; sections: readonly SectionView[]; totalSections: number } | undefined
 }
 
 /** One named contribution of the unified runtime-context snapshot. */

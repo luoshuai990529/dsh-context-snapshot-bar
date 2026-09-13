@@ -55,6 +55,22 @@
       "truncated": false,
       "sourceName": "@deepseek-ai/dsh-system-prompt",
       "toolCalls": [],
+      "runtimeSnapshot": {
+        "status": "present",
+        "sections": [
+          {
+            "name": "sandbox:policy",
+            "text": "workspace-write",
+            "truncated": false
+          },
+          {
+            "name": "approval:policy",
+            "text": "ask",
+            "truncated": false
+          }
+        ],
+        "totalSections": 2
+      },
       "resultFor": null
     },
     {

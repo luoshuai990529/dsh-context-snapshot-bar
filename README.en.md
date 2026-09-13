@@ -8,6 +8,7 @@ See what DeepSeek Harness currently retains: runtime snapshots, message history 
 
 ## What it does
 
+- **Runtime snapshot nodes**: every runtime-context record is its own amber node in the trajectory, visible while its turn is collapsed; each node digests its own sections instead of borrowing the newest record's summary, and a new record is highlighted once.
 - **Context snapshot**: shows the latest recorded rules, source, and timestamp, distinguishing active, cleared, and replaced records.
 - **Conversation trajectory**: groups user messages, assistant tool calls, and results by turn, with the latest compaction summary and the messages it replaced.
 - **Where to find it**: an entry above the composer opens a right sidebar with tabs for both views.
@@ -19,7 +20,7 @@ The plugin reads committed Session events. It does not write to the session log 
 | Component | Version |
 | --- | --- |
 | DSH with recorded installation and runtime verification | **`0.1.5-rc.2` (Host + Web)** |
-| Current plugin version | `0.2.0` |
+| Current plugin version | `0.3.0` (source; npm has `0.2.0`) |
 | Declared Session / Projection peer range | `>=0.1.5-rc.2 <0.2.0-0` |
 | Node.js | `^22.19.0 \|\| >=24.0.0` |
 
@@ -48,6 +49,7 @@ For a custom Web profile, replace `web` with its name. To modify or build the pl
 
 - **Real-time scope**: updates follow committed events, not individual streamed tokens. The latest snapshot may no longer be in the model's current context.
 - **Digest requests**: configuring a model route enables additional requests containing the section text held by the card. See the [configuration and development guide](docs/guide.md) for disabling them and adjusting display limits.
+- **Installing from npm**: the command above installs the published `0.2.0`. The runtime snapshot nodes live in `0.3.0`, which is in this source tree only for now; use `@0.3.0` once it is published.
 - **Long sessions and motion**: omitted content is counted. The current version shows compaction comparisons; the animation that contracts old message groups is not implemented.
 - **Uninstall**: run the command below and restart the service. Session data is retained.
 

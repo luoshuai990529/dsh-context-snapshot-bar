@@ -7,7 +7,7 @@
  * @module dsh-context-snapshot-bar/client/display
  */
 
-import type { ContextSnapshotBarKey } from './locales.ts'
+import { zh, type ContextSnapshotBarKey, type TranslateBar } from './locales.ts'
 import type { NodeKind } from '../shared/types.ts'
 
 /**
@@ -80,4 +80,19 @@ export function digestLines(text: string): readonly string[] {
     .split('\n')
     .map(line => line.trim().replace(/^[-*•·]\s+/, '').trim())
     .filter(line => line !== '')
+}
+
+/**
+ * The locale the kernel is translating in.
+ *
+ * The runtime gives a card its translator, not a locale code, so the plugin
+ * reads it back from a key whose two dictionaries differ. Anything that has to
+ * speak the card's language — a digest request, a fallback label — asks here
+ * rather than comparing dictionaries of its own.
+ *
+ * @param t - the namespace translator.
+ * @returns the active locale of this plugin's dictionaries.
+ */
+export function activeLocale(t: TranslateBar): 'zh' | 'en' {
+  return t('snapshot.title') === zh['snapshot.title'] ? 'zh' : 'en'
 }

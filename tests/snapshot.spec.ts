@@ -225,3 +225,29 @@ describe('surface oracle agreement', () => {
     expectSurfaceMatchesOracle(builder)
   })
 })
+
+it('keeps bounded snapshot metadata on each trajectory record', () => {
+  const builder = logBuilder()
+  builder.snapshot([{ name: 'policy', text: 'first policy' }])
+  builder.snapshot([{ name: 'policy', text: 'second policy' }])
+  const view = viewOf(builder.events)
+  expect(view.nodes.map(n => (n as NodeViewWithSnapshot).runtimeSnapshot?.sections[0]?.text))
+    .toEqual(['first policy', 'second policy'])
+})
+type NodeViewWithSnapshot = { runtimeSnapshot?: { sections: readonly { text: string }[] } }
+
+it('bounds per-record sections and recognizes clearing without classifying ordinary injections', () => {
+  const builder = logBuilder()
+  builder.injected('@deepseek-ai/dsh-system-prompt', 'ordinary context')
+  builder.snapshot([{ name: 'one', text: 'x'.repeat(9000) }, { name: 'two', text: 'two' }])
+  builder.clearSnapshot()
+  const config = resolveConfig({ snapshotSectionLimit: 1, snapshotPreviewChars: 200 })
+  const state = builder.events.reduce((state, event) => reduceEvent(state, event, config), initialState(config))
+  const nodes = toView(state, config).nodes
+  expect(nodes[0]?.runtimeSnapshot).toBeUndefined()
+  expect(nodes[1]?.runtimeSnapshot?.sections).toHaveLength(1)
+  expect(nodes[1]?.runtimeSnapshot?.sections[0]?.text.length).toBeLessThanOrEqual(200)
+  expect(nodes[1]?.runtimeSnapshot?.sections[0]?.truncated).toBe(true)
+  expect(nodes[1]?.runtimeSnapshot?.totalSections).toBe(2)
+  expect(nodes[2]?.runtimeSnapshot).toEqual({ status: 'cleared', sections: [], totalSections: 0 })
+})

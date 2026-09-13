@@ -15,9 +15,9 @@ import type { BarView } from '../shared/types.ts'
 import type { ContextSnapshotBarKey, TranslateBar } from './locales.ts'
 import { SCOPE, cls } from './display.ts'
 import { SnapshotCard } from './SnapshotCard.tsx'
+import { activeLocale } from './display.ts'
 import { useSnapshotSummary, type SummaryCaller } from './summary.ts'
 import type { SnapshotSummaryRequest } from '../shared/types.ts'
-import { zh } from './locales.ts'
 import { TrajectoryCard } from './TrajectoryCard.tsx'
 
 /** Which card the column is showing. */
@@ -37,20 +37,6 @@ export interface ContextPanelProps {
   summaryCaller?: () => SummaryCaller | undefined
 }
 
-/**
- * The locale the kernel is translating in.
- *
- * The runtime gives a card its translator, not a locale code, so the card reads
- * it back from a key whose two dictionaries differ; the digest is written in the
- * language the card is already speaking.
- *
- * @param t - the namespace translator.
- * @returns the active locale of this plugin's dictionaries.
- */
-function activeLocale(t: TranslateBar): SnapshotSummaryRequest['locale'] {
-  return t('snapshot.title') === zh['snapshot.title'] ? 'zh' : 'en'
-}
-
 /** The two tabs, in the order the prototype draws them. */
 const TABS = [
   { pane: 'trajectory', label: 'panel.trajectory' },
@@ -64,8 +50,8 @@ const TABS = [
  */
 export function ContextPanel({ view, requested, navigationRevision, t, summaryCaller }: ContextPanelProps) {
   const [pane, setPane] = useState<ContextPane>(requested ?? 'trajectory')
-  // Only the snapshot card asks for a digest, so the request exists only while
-  // that card is the one on screen: mounting the column costs no model call.
+  // The snapshot pane requests its latest record here; trajectory nodes
+  // request their own records while the trajectory pane is mounted.
   const digestRequest: SnapshotSummaryRequest | null = pane !== 'snapshot' || view === undefined
     || view.snapshot.seq === null || view.snapshot.sections.length === 0
     ? null
@@ -98,7 +84,7 @@ export function ContextPanel({ view, requested, navigationRevision, t, summaryCa
           ))}
         </div>
         {pane === 'trajectory'
-          ? <TrajectoryCard view={view} t={t} />
+          ? <TrajectoryCard view={view} t={t} summaryCaller={summaryCaller} />
           : <SnapshotCard view={view} t={t} summary={summary} />}
       </div>
     </div>

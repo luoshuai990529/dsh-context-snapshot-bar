@@ -50,7 +50,7 @@ To enable the digest, configure a provider and model supported by your deploymen
     snapshotSummaryTimeoutMs: 30000
 ```
 
-The digest is requested while the snapshot tab is visible and cached in the Host process by content, language, and digest configuration. It sends the section text held by the card, which may already be truncated, to the configured provider. This is an additional model request and may incur usage charges. The selected provider may differ from the conversation's provider.
+Digests are requested for snapshot records while their pane is mounted (including runtime nodes in collapsed trajectory turns) and cached in the Host process by content, language, and digest format. It sends the section text held by the card, which may already be truncated, to the configured provider. This is an additional model request and may incur usage charges. The selected provider may differ from the conversation's provider.
 
 With no route, an explicit disable, or a failed request, the raw snapshot remains readable. The digest is auxiliary; it does not replace the recorded text or write to the Session log.
 
@@ -100,7 +100,7 @@ pnpm run pack
 
 `pnpm test` builds first because some tests inspect the emitted Host and Client artifacts. Running an individual Vitest spec bypasses that step; build before artifact-dependent tests.
 
-The Open Design references live in the repository's `docs/design/` directory. The turn-first prototype of record is `dsh-context-snapshot-prototype-v5.html`. The current style generator reads `dsh-context-snapshot-prototype-v4.html`; inspect `scripts/gen-card-styles.mjs` before regeneration. Do not hand-edit generated `src/client/styles.ts`; host-specific layout adaptations live in `src/client/host.css.ts`.
+The Open Design references live in the repository's `docs/design/` directory. The turn-first baseline is `dsh-context-snapshot-prototype-v5.html`; the runtime-node addition follows `dsh-context-snapshot-prototype-v6.html`. The current style generator reads `dsh-context-snapshot-prototype-v5.html`; inspect `scripts/gen-card-styles.mjs` before regeneration. Do not hand-edit generated `src/client/styles.ts`; host-specific layout adaptations live in `src/client/host.css.ts`.
 
 To inspect the rendered cards without starting DSH, after a build:
 
@@ -110,3 +110,10 @@ pnpm run check:render
 ```
 
 The first command writes `artifacts/preview.html`; the second checks browser layout and writes a screenshot, requiring Chrome. These checks do not replace live DSH installation and Session verification.
+
+### Runtime snapshot nodes
+
+Amber nodes show each retained runtime snapshot in its owning turn, including while that turn is collapsed. Expanded turns keep snapshot nodes between the corresponding tool cycles. Each node uses its own bounded sections for an optional model digest; without an available digest it labels the text as a source excerpt. Clear records have an explicit cleared state. Old snapshots leave the current trajectory only when a committed replacement removes them. The projection state version is 3 so existing logs rebuild the per-record metadata. The node's amber
+palette is transcribed from `dsh-context-snapshot-prototype-v6.html` into the hand-written
+`src/client/host.css.ts`, because the generated sheet still tracks the visually-verified v5 file; a
+browser pass over the prototype was not completed. No DSH core changes are required.

@@ -8,7 +8,7 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { BarView, NodeView, SnapshotStatus } from '../src/shared/types.ts'
 import { ComposerEntry, entrySummary } from '../src/client/ComposerEntry.tsx'
 import { ContextPanel } from '../src/client/ContextPanel.tsx'
@@ -424,4 +424,58 @@ describe('ComposerEntry', () => {
     fireEvent.click(screen.getByLabelText('打开上下文快照'))
     expect(open).toHaveBeenCalledTimes(1)
   })
+})
+
+describe('runtime snapshot trajectory nodes', () => {
+  const runtime = (seq: number) => node(seq, {
+    kind: 'injected', sourceName: '@deepseek-ai/dsh-system-prompt',
+    ...{ runtimeSnapshot: { status: 'present', sections: [{ name: 'policy', text: `policy ${seq}`, truncated: false }], totalSections: 1 } },
+  })
+  it('keeps snapshots visible in collapsed turns and orders them between tool calls when expanded', () => {
+    const nodes = [node(1), node(2, { kind: 'assistant', toolCalls: [CALL] }), runtime(3), node(4, { kind: 'assistant', toolCalls: [{ ...CALL, callId: 'call-2' as typeof CALL.callId, name: 'second_tool' }] })]
+    const { container } = render(<TrajectoryCard view={view({ nodes })} t={t} />)
+    expect(screen.getByText('运行时快照')).toBeTruthy()
+    expect(screen.getByText('policy 3')).toBeTruthy()
+    fireEvent.click(container.querySelector('[data-turn="1"]')!)
+    const text = container.textContent!
+    expect(text.indexOf('read_file')).toBeLessThan(text.indexOf('policy 3'))
+    expect(text.indexOf('policy 3')).toBeLessThan(text.indexOf('second_tool'))
+    expect(screen.getAllByText('运行时快照')).toHaveLength(1)
+  })
+})
+
+it('shows clear records without borrowing the preceding snapshot digest', () => {
+  const cleared = node(3, { kind: 'injected', runtimeSnapshot: { status: 'cleared', sections: [], totalSections: 0 } })
+  render(<TrajectoryCard view={view({ nodes: [node(1), cleared] })} t={t} />)
+  expect(screen.getByText('运行时上下文已清除')).toBeTruthy()
+  expect(screen.queryByText('原文摘录')).toBeNull()
+})
+
+it('animates only newly observed snapshots, not initial hydration or turn expansion', () => {
+  const first = node(2, { kind: 'injected', runtimeSnapshot: { status: 'present', sections: [], totalSections: 0 } })
+  const next = node(3, { ...first, seq: 3 as NodeView['seq'] })
+  const baseline = view({ nodes: [node(1), first] })
+  const { container, rerender } = render(<TrajectoryCard view={baseline} t={t} />)
+  expect(container.querySelector('.runtime-arrival')).toBeNull()
+  fireEvent.click(container.querySelector('[data-turn="1"]')!)
+  expect(container.querySelector('.runtime-arrival')).toBeNull()
+  rerender(<TrajectoryCard view={view({ nodes: [node(1), first, next], revision: 2 })} t={t} />)
+  expect(container.querySelector('.runtime-arrival')?.getAttribute('data-runtime-seq')).toBe('3')
+  rerender(<TrajectoryCard view={undefined} t={t} />)
+  rerender(<TrajectoryCard view={view({ nodes: [node(1), first, next], revision: 4 })} t={t} />)
+  expect(container.querySelector('.runtime-arrival')).toBeNull()
+})
+
+it('requests and renders each snapshot digest from its own sections', async () => {
+  const caller = vi.fn(async (_channel: string, _endpoint: string, payload: unknown) => {
+    const request = payload as { sections: { text: string }[] }
+    return { ok: true, value: { status: 'ready', text: `digest: ${request.sections[0]?.text}`, model: 'test/model' } }
+  })
+  const first = node(2, { kind: 'injected', runtimeSnapshot: { status: 'present', sections: [{ name: 'policy', text: 'first', truncated: false }], totalSections: 1 } })
+  const second = node(3, { ...first, seq: 3 as NodeView['seq'], runtimeSnapshot: { status: 'present', sections: [{ name: 'policy', text: 'second', truncated: false }], totalSections: 1 } })
+  const { container } = render(<TrajectoryCard view={view({ nodes: [node(1), first, second] })} t={t} summaryCaller={() => caller} />)
+  await waitFor(() => { expect(container.querySelector('[data-runtime-seq="2"]')?.textContent).toContain('digest: first') })
+  expect(container.querySelector('[data-runtime-seq="3"]')?.textContent).toContain('digest: second')
+  fireEvent.click(container.querySelector('[data-turn="1"]')!)
+  expect(caller).toHaveBeenCalledTimes(2)
 })

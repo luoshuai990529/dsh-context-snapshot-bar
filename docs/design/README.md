@@ -4,7 +4,10 @@
 
 - [完整交互原型](dsh-context-snapshot-prototype.html)：HTML 内含 CSS、双卡片 DOM 和演示交互脚本，可在浏览器打开；不依赖 Open Design 服务。
 - [最新侧栏设计（本次实现依据）](dsh-context-snapshot-prototype-v4.html)：右侧上下文列 + 标签页 + 输入框上方快捷入口；SHA256 `aec0cb0b…`，由产品侧复制归档。
+- [消息轨迹与压缩内联设计（v5）](dsh-context-snapshot-prototype-v5.html)：轮次优先轨迹、压缩对照与归档展开；样式生成器读这一份。
+- [运行时快照节点设计（v6）](dsh-context-snapshot-prototype-v6.html)：琥珀色快照节点、到达动效与状态标记；由 Codex 本地修改，未在 Studio 同步，其 `.runtime-node*` 样式由 `src/client/host.css.ts` 手工转写（见 [设计说明](runtime-snapshot-node-design.md)）。
 - [样式与交互说明](brand-spec.md)：颜色、字体、卡片约束、事件驱动动画说明。
+- [运行时快照节点设计说明](runtime-snapshot-node-design.md)：展示、位置、状态与动效约束。
 - [产品设计与数据语义](../2026-09-11-context-snapshot-bar-spec.md)：真实数据范围、状态定义与实现限制。
 - [实施计划](../../superpowers/plans/2026-09-11-dsh-context-snapshot-bar.md)：工程任务与验收；实施进度以项目验收记录为准。
 

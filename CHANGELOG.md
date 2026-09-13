@@ -4,6 +4,35 @@ Versions describe the bundle's own contract. An installed copy is identified by
 the content hash `dsh plugin add` writes into its vendor file name, so two builds
 of one version never share an identity; only the versions below were published.
 
+## 0.3.0
+
+**Runtime snapshot nodes in the trajectory.** Each retained runtime-context
+record is now its own node in the message trajectory, in the turn it was
+committed in, so the transcript shows where the context changed instead of only
+what the newest record says.
+
+- Amber, distinct from the blue turns, the green compaction summary, and the grey
+  system anchors; the icon and title carry the meaning, the colour is secondary.
+- A snapshot stays visible while its turn is collapsed, and sits between the tool
+  cycles it actually fell between when the turn is expanded — never moved to the
+  turn's start or end.
+- Each node asks for the digest of **its own** bounded sections, so a historical
+  record never borrows the newest record's summary; without a digest it labels
+  the text as a source excerpt. A clear record shows its own cleared state.
+- The newest valid record is marked latest; older records still in context are
+  marked history, and a record leaves the trajectory only when a committed
+  replacement removes it — never at `compaction/start`.
+- A newly observed record fades in once (650ms, 5px, amber edge), and hydration,
+  reconnection, and tab switches do not play it; `prefers-reduced-motion` is
+  honoured.
+- `STATE_VERSION` moves to 3: the per-record metadata is derived from the log, so
+  existing caches rebuild it.
+
+The reference is `docs/design/dsh-context-snapshot-prototype-v6.html`, and its
+`.runtime-node*` rules are transcribed into the hand-written stylesheet because
+the generated sheet still tracks the visually-verified v5 prototype. A browser
+pass over the v6 prototype was not completed.
+
 ## 0.2.0
 
 Everything since the first bundle: the runtime-context card gained a model-written

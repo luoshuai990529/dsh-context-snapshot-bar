@@ -155,6 +155,15 @@ export function nodeFromEvent(
   const source = embedded?.source ?? payload.source ?? { kind: 'plugin' }
   const bounded = textOf(content, config.excerptChars)
   const sourceName = source.kind === 'plugin' ? source.plugin ?? null : null
+  const runtime = event.type === 'user/message' ? snapshotOf(source, sourceName === SNAPSHOT_PRODUCER ? fullTextOf(content) : '') : null
+  const runtimeSnapshot: NodeView['runtimeSnapshot'] = runtime === null ? undefined : {
+    status: runtime === 'cleared' ? 'cleared' : 'present',
+    sections: runtime === 'cleared' ? [] : runtime.sections.slice(0, config.snapshotSectionLimit).map(section => {
+      const bounded = excerpt(section.text, config.snapshotPreviewChars)
+      return { name: section.name, text: bounded.text, truncated: bounded.truncated }
+    }),
+    totalSections: runtime === 'cleared' ? 0 : runtime.sections.length,
+  }
   const inheritsBoundary = event.type === 'user/message'
   return {
     seq: sessionSeq(event.seq),
@@ -166,6 +175,7 @@ export function nodeFromEvent(
     truncated: bounded.truncated,
     sourceName,
     toolCalls,
+    ...(runtimeSnapshot === undefined ? {} : { runtimeSnapshot }),
     resultFor: source.kind === 'tool' ? source.callId ?? null : null,
   }
 }

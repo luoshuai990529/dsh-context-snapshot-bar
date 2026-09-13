@@ -17,14 +17,18 @@
  * @module dsh-context-snapshot-bar/client/TrajectoryCard
  */
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { BarView, AttemptPhase, NodeView } from '../shared/types.ts'
 import type { ContextSnapshotBarKey, TranslateBar } from './locales.ts'
+import { RuntimeSnapshotNode, RuntimeSnapshotContext } from './RuntimeSnapshotNode.tsx'
+import type { SummaryCaller } from './summary.ts'
 import { KIND_KEYS, SCOPE, cls } from './display.ts'
 import { chipsFor, prunedSeqOf, type ToolChip } from './trajectory.ts'
 
 /** Props for the trajectory card. */
 export interface TrajectoryCardProps {
+  /** Getter for the existing Host digest service. */
+  summaryCaller?: (() => SummaryCaller | undefined) | undefined
   /** The current projection value, absent until the first baseline or frame carries the key. */
   view: BarView | undefined
   /** Translate a key in this plugin's namespace. */
@@ -157,13 +161,27 @@ function cycleResult(cycle: Cycle, t: TranslateBar): string {
  * @param props - the projection value and the card's copy.
  * @returns the card element.
  */
-export function TrajectoryCard({ view, t }: TrajectoryCardProps) {
+export function TrajectoryCard({ view, t, summaryCaller }: TrajectoryCardProps) {
   const [expanded, setExpanded] = useState(true)
   const [openTurns, setOpenTurns] = useState<ReadonlySet<string>>(NO_STRINGS)
   const [openCalls, setOpenCalls] = useState<ReadonlySet<string>>(NO_STRINGS)
   const [summaryOpen, setSummaryOpen] = useState(false)
   const [archiveOpen, setArchiveOpen] = useState(false)
   const nodes = view?.nodes ?? []
+  const runtimeIdentity = view === undefined ? undefined : nodes.filter(node => node.runtimeSnapshot !== undefined).map(node => Number(node.seq)).join(',')
+  const previous = useRef<BarView | undefined>(undefined)
+  const [arriving, setArriving] = useState<ReadonlySet<number>>(new Set())
+  useEffect(() => {
+    const before = previous.current
+    previous.current = view
+    const incoming = before === undefined || view === undefined || view.revision <= before.revision
+      ? [] : view.nodes.filter(node => node.runtimeSnapshot !== undefined
+        && Number(node.seq) > Math.max(0, ...before.nodes.map(item => Number(item.seq))))
+    setArriving(new Set(incoming.map(node => Number(node.seq))))
+    if (incoming.length === 0) return
+    const timer = setTimeout(() => { setArriving(new Set()) }, 650)
+    return () => { clearTimeout(timer) }
+  }, [runtimeIdentity])
 
   const phase: AttemptPhase = view?.attempt ?? 'idle'
   const compression = view?.latestCompression ?? null
@@ -222,6 +240,7 @@ export function TrajectoryCard({ view, t }: TrajectoryCardProps) {
   }
 
   return (
+    <RuntimeSnapshotContext.Provider value={{ latestSeq: view?.snapshot.status === 'present' ? Number(view.snapshot.seq) : null, arriving, summaryCaller }}>
     <div className={SCOPE}>
       <section className={cls('trajectory-card')} aria-label={t('trajectory.title')}>
         <button
@@ -269,7 +288,7 @@ export function TrajectoryCard({ view, t }: TrajectoryCardProps) {
               />
             )}
             {olderTurns.map(turn => renderTurn(turn))}
-            {anchors.map(node => (
+            {anchors.map(node => node.runtimeSnapshot !== undefined ? <RuntimeSnapshotNode key={node.seq} node={node} t={t} /> : (
               <LeafRow
                 key={node.seq}
                 first={`${t(KIND_KEYS[node.kind])} · ${node.title}`}
@@ -282,6 +301,7 @@ export function TrajectoryCard({ view, t }: TrajectoryCardProps) {
         </div>
       </section>
     </div>
+    </RuntimeSnapshotContext.Provider>
   )
 }
 
@@ -337,7 +357,14 @@ function TurnCard({
   const key = archived ? `archive-${turn.turn}` : String(turn.turn)
   const cycles = cyclesOf(turn, nodes, prunedSeq)
   const injected = injectedOf(turn)
+  const entries = turn.nodes.flatMap<{ node: NodeView; cycle: Cycle | null }>(node => {
+    if (node.runtimeSnapshot !== undefined) return [{ node, cycle: null }]
+    if (!open) return []
+    const owned = cycles.filter(cycle => cycle.ownerSeq === Number(node.seq))
+    return owned.length > 0 ? owned.map(cycle => ({ node, cycle })) : [{ node, cycle: null }]
+  })
   const final = finalOf(turn)
+  const finalNode = turn.nodes.findLast(n => n.kind === 'assistant' && n.toolCalls.length === 0)
   return (
     <section className={cls('turn-card', archived && 'archived')}>
       <button
@@ -358,18 +385,17 @@ function TurnCard({
           </span>
         </span>
       </button>
-      {open ? (
+      {open || turn.nodes.some(node => node.runtimeSnapshot !== undefined) ? (
         <div className={cls('turn-cycles')}>
-          {injected.map(node => (
-            <LeafRow
-              key={node.seq}
-              first={`${t(KIND_KEYS[node.kind])} · ${node.title}`}
-              second={node.excerpt}
-              kind=""
-            />
-          ))}
-          {cycles.map((cycle, index) => {
-            const pair = `${key}-${index}`
+          {entries.map(({ node, cycle }) => {
+            if (node.runtimeSnapshot !== undefined) return <RuntimeSnapshotNode key={node.seq} node={node} t={t} />
+            if (cycle === null) {
+              if (injected.includes(node)) return <LeafRow key={node.seq} first={`${t(KIND_KEYS[node.kind])} · ${node.title}`} second={node.excerpt} kind="" />
+              if (node === finalNode && final !== null) return <LeafRow key={node.seq} first={t('trajectory.final')} second={final} kind="final-leaf" />
+              return null
+            }
+
+            const pair = `${key}-${cycle.ownerSeq}-${cycle.chip.callId}`
             const cycleOpen = openCalls.has(pair)
             const result = cycleResult(cycle, t)
             return (
@@ -381,7 +407,7 @@ function TurnCard({
                   onClick={() => { onToggleCycle(pair) }}
                 >
                   <span className={cls('trace-line')}>
-                    <span className={cls('cycle-index')}>{String(index + 1).padStart(2, '0')}</span>
+                    <span className={cls('cycle-index')}>{String(cycles.indexOf(cycle) + 1).padStart(2, '0')}</span>
                     {t('trajectory.cycle.call', { name: cycle.chip.name })}
                   </span>
                   <span className={cls('trace-line', 'secondary')}>{result}</span>
@@ -408,7 +434,6 @@ function TurnCard({
               </div>
             )
           })}
-          {final === null ? null : <LeafRow first={t('trajectory.final')} second={final} kind="final-leaf" />}
         </div>
       ) : null}
     </section>
